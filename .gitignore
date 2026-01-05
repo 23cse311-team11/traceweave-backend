@@ -11,6 +11,7 @@ out/
 # Env files
 .env
 .env.local
+.env.*
 
 # Docker
 *.log

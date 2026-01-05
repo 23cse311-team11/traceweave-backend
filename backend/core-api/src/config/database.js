@@ -1,13 +1,6 @@
 import { Sequelize } from 'sequelize';
 import config from './config.js'; 
 
-console.log({
-  DB_NAME: process.env.DB_NAME,
-  DB_USER: process.env.DB_USER,
-  DB_PASSWORD_TYPE: typeof process.env.DB_PASSWORD,
-});
-
-
 // Initialize Sequelize instance
 const sequelize = new Sequelize(
   process.env.DB_NAME,

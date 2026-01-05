@@ -10,7 +10,9 @@ import sequelize from './config/database.js';
 import dotenv from 'dotenv';
 import routes from './routes/index.js';
 
-dotenv.config();
+if (!process.env.DB_HOST) {
+  dotenv.config({ path: ".env.local" });
+}
 
 const app = express();
 
@@ -25,18 +27,20 @@ app.get('/health', (req, res) => {
   res.status(200).send({ status: 'OK', service: 'Core API' });
 });
 
+app.use('/v1', routes);
+
 // Test the error handler
 app.get('/test-error', (req, res, next) => {
   // Simulate a 400 Bad Request
   next(new ApiError(httpStatus.BAD_REQUEST, 'This is a test error for OP-B01'));
 });
 
+
 // 404 Handler (for unknown routes)
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 });
 
-app.use('/v1', routes);
 
 // Global Error Processing
 app.use(errorConverter); // Convert non-ApiErrors to ApiErrors

@@ -6,10 +6,17 @@ services:
     volumes:
       - ./backend/core-api/src:/app/src
       - ./backend/core-api/package.json:/app/package.json
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgres://user:password@postgres:5432/traceweave
-      - MONGO_URL=mongodb://mongo:27017/traceweave_history
+    # environment:
+    #   - NODE_ENV=development
+    #   - DB_HOST=postgres
+    #   - DB_USER=admin
+    #   - DB_PASSWORD=password
+    #   - DB_NAME=traceweave
+    #   - DB_PORT=5432
+    #   - DATABASE_URL=postgres://admin:password@postgres:5432/traceweave
+    #   - MONGO_URL=mongodb://mongo:27017/traceweave_history
+    env_file:
+      - ./backend/core-api/.env.docker
     command: npm run dev
 
   proxy-service:
