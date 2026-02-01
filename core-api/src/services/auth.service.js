@@ -2,6 +2,7 @@ import httpStatus from 'http-status';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/prisma.js';
 import ApiError from '../utils/ApiError.js';
+import { sendEmail } from './email.service.js';
 
 const createUser = async (userBody) => {
   if (await prisma.user.findUnique({ where: { email: userBody.email } })) {
@@ -30,6 +31,16 @@ const createUser = async (userBody) => {
     return newUser;
   });
   
+  sendEmail({
+    to: userBody.email,
+    subject: 'Welcome to Trace-weave!',
+    html: `
+      <h1>Welcome, ${userBody.name}!</h1>
+      <p>We are thrilled to have you on board.</p>
+      <p>Start building your API collections today.</p>
+    `,
+  }).catch(err => console.error("Background email failed", err));
+
   return user;
 };
 
@@ -64,7 +75,7 @@ export default {
  * @param {object} profileData - { fullName, avatarUrl }
  */
 export const findOrCreateUser = async (email, provider, providerId, profileData) => {
-  // 1. Try to find an existing IDENTITY
+  // Try to find an existing IDENTITY
   const existingIdentity = await prisma.identity.findUnique({
     where: {
       provider_providerId: {
@@ -93,6 +104,16 @@ export const findOrCreateUser = async (email, provider, providerId, profileData)
         avatarUrl: profileData.avatarUrl,
       },
     });
+
+    sendEmail({
+      to: email,
+      subject: 'Welcome to Trace-weave!',
+      html: `
+        <h1>Welcome, ${profileData.fullName}!</h1>
+        <p>We are thrilled to have you on board.</p>
+        <p>Start building your API collections today.</p>
+      `,
+    }).catch(err => console.error("Background email failed", err));
   }
 
   // 4. Create the Identity Link (Link Provider -> User)

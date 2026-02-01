@@ -38,13 +38,6 @@ app.get('/health', (req, res) => {
 
 app.use('/v1', routes);
 
-// Test the error handler
-app.get('/test-error', (req, res, next) => {
-  // Simulate a 400 Bad Request
-  next(new ApiError(httpStatus.BAD_REQUEST, 'This is a test error for OP-B01'));
-});
-
-
 // 404 Handler (for unknown routes)
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
