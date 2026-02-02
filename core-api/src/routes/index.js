@@ -8,6 +8,10 @@ const defaultRoutes = [
     path: '/auth',
     route: authRoute,
   },
+  {
+    path: '/collections',
+    route: collectionRoute,
+  },
 ];
 
 defaultRoutes.forEach((route) => {
