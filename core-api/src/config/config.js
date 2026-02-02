@@ -6,9 +6,9 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 export default {
   env: process.env.NODE_ENV || 'development',
-  port: process.env.PORT || 3000,
+  port: process.env.PORT || 4000,
   jwt: {
     secret: process.env.JWT_SECRET || 'secret',
-    accessExpirationMinutes: process.env.JWT_ACCESS_EXPIRATION_MINUTES || 60,
+    accessExpirationMinutes: process.env.JWT_ACCESS_EXPIRATION_MINUTES || 60 * 24 * 30,
   },
 };

@@ -105,14 +105,14 @@ model Collection {
   @@map("collections")
 }
 
-// OP-361: Request Definitions (The "Postman" Request)
+// OP-361: Request Definitions
 model RequestDefinition {
   id           String   @id @default(uuid())
   collectionId String   @map("collection_id")
   name         String
   method       String   // GET, POST, PUT, etc.
   url          String
-  headers      Json?    // Storing structured data as JSONB
+  headers      Json?    
   body         Json?
   params       Json?
   
