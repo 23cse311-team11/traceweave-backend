@@ -23,3 +23,31 @@ export const workspaceService = {
     });
   },
 };
+
+export const getMyWorkspaces = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const workspaces = await workspaceService.getUserWorkspaces(userId);
+
+    res.status(200).json({ data: workspaces });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getWorkspaceById = async (req, res, next) => {
+  try {
+    const { workspaceId } = req.params;
+    const userId = req.user.id;
+
+    const workspace = await workspaceService.getWorkspaceById(
+      workspaceId,
+      userId
+    );
+
+    res.status(200).json({ data: workspace });
+  } catch (error) {
+    next(error);
+  }
+};
