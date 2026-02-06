@@ -11,7 +11,7 @@ export const createCollection = catchAsync(async (req, res) => {
   const { workspaceId } = req.params;
   const userId = req.user.id;
   console.log('userId:', req.user.id);
- console.log('workspaceId:', workspaceId);
+  console.log('workspaceId:', workspaceId);
 
   // Validate workspace ownership / access
   await workspaceService.getWorkspaceById(workspaceId, userId);
@@ -41,4 +41,16 @@ export const deleteCollection = catchAsync(async (req, res) => {
     await CollectionService.softDeleteCollection(collectionId);
 
   res.status(httpStatus.OK).send(result);
+});
+
+export const updateCollection = catchAsync(async (req, res) => {
+  const { collectionId } = req.params;
+  const { name } = req.body;
+
+  const collection = await CollectionService.updateCollection(
+    collectionId,
+    { name }
+  );
+
+  res.status(httpStatus.OK).send(collection);
 });

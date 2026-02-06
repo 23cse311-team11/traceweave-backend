@@ -3,6 +3,7 @@ import authRoute from './auth.routes.js';
 import uploadRoute from './upload.routes.js';
 import collectionRoute from './collection.route.js';
 import workspaceRoute from './workspace.routes.js';
+import requestRoute from './request.route.js';
 const router = express.Router();
 
 const defaultRoutes = [
@@ -21,6 +22,10 @@ const defaultRoutes = [
   {
     path: '/workspaces',
     route: workspaceRoute,
+  },
+  {
+    path: '/requests',
+    route: requestRoute,
   },
 
 ];

@@ -3,7 +3,8 @@ import authMiddleware from '../middlewares/auth.middleware.js';
 import {
   createCollection,
   getCollectionsByWorkspace,
-  deleteCollection
+  deleteCollection,
+  updateCollection
 } from '../controllers/collection.controller.js';
 
 const router = express.Router();
@@ -14,5 +15,6 @@ router.use(authMiddleware);
 router.post('/workspace/:workspaceId', createCollection);
 router.get('/workspace/:workspaceId', getCollectionsByWorkspace);
 router.delete('/:collectionId', deleteCollection);
+router.patch('/:collectionId', updateCollection);
 
 export default router;

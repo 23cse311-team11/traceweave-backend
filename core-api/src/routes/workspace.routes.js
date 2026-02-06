@@ -4,7 +4,8 @@ import {
   createWorkspace,
   getMyWorkspaces,
   getWorkspaceById,
-  deleteWorkspace
+  deleteWorkspace,
+  updateWorkspace
 } from '../controllers/workspace.controller.js';
 
 const router = express.Router();
@@ -19,5 +20,7 @@ router.get('/', authMiddleware, getMyWorkspaces);
 router.get('/:workspaceId', authMiddleware, getWorkspaceById);
 
 router.delete('/:workspaceId', authMiddleware, deleteWorkspace);
+
+router.patch('/:workspaceId', authMiddleware, updateWorkspace);
 
 export default router;

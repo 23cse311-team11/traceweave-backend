@@ -66,3 +66,24 @@ export const deleteWorkspace = async (req, res, next) => {
     next(error);
   }
 };
+
+export const updateWorkspace = async (req, res, next) => {
+  try {
+    const { workspaceId } = req.params;
+    const userId = req.user.id;
+    const { name, description } = req.body;
+
+    const workspace = await workspaceService.updateWorkspace(
+      workspaceId,
+      userId,
+      { name, description }
+    );
+
+    res.status(200).json({
+      message: 'Workspace updated successfully',
+      data: workspace
+    });
+  } catch (error) {
+    next(error);
+  }
+};

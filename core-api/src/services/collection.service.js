@@ -94,4 +94,25 @@ export class CollectionService {
     };
 
   }
+
+  static async updateCollection(collectionId, updateBody) {
+    const collection = await prisma.collection.findFirst({
+      where: {
+        id: collectionId,
+        deletedAt: null
+      }
+    });
+
+    if (!collection) {
+      throw new ApiError(
+        httpStatus.NOT_FOUND,
+        'Collection not found'
+      );
+    }
+
+    return prisma.collection.update({
+      where: { id: collectionId },
+      data: updateBody
+    });
+  }
 }
