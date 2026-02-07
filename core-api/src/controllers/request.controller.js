@@ -45,57 +45,53 @@ export const requestController = {
         try {
         const { requestId } = req.params;
         const userId = req.user.id;
+        
+        // 1. Get Runtime Overrides (Draft Mode)
+        // overrides = { url: "...", body: ... } (Unsaved changes from frontend)
+        const { overrides = {}, variables = {} } = req.body;
 
-        // 1. Get Request Definition from Postgres
+        // 2. Fetch Source of Truth
         const requestDef = await prisma.requestDefinition.findUnique({
             where: { id: requestId },
-            include: { collection: true }, // To get workspaceId if needed
+            include: { collection: true },
         });
 
         if (!requestDef) {
             return res.status(404).json({ error: 'Request definition not found' });
         }
 
-        // 2. Prepare Config (Merge saved config with runtime overrides if any)
-        // For now, we just run what's saved
-        const config = {
-            method: requestDef.method,
-            url: requestDef.url,
-            headers: requestDef.headers,
-            body: requestDef.body,
-            params: requestDef.params,
+        // 3. Merge: Database Config + Overrides
+        let config = {
+            method: overrides.method || requestDef.method,
+            url: overrides.url || requestDef.url,
+            headers: overrides.headers || requestDef.headers,
+            body: overrides.body || requestDef.body,
+            params: overrides.params || requestDef.params,
         };
 
-        // 3. Execute Request (The Runner)
+        // 4. (Future) Variable Substitution
+        // config = substituteVariables(config, variables);
+
+        // 5. Execute
         const result = await executeHttpRequest(config);
 
-        // 4. Async: Save History to MongoDB (Fire and Forget or Await?)
-        // We await it to return the 'historyId' to the user immediately
+        // 6. Log History (Linked to Request ID)
         const executionLog = await ExecutionLog.create({
             requestId: requestDef.id,
             collectionId: requestDef.collectionId,
             workspaceId: requestDef.collection.workspaceId,
-            
             method: config.method,
             url: config.url,
-            requestHeaders: config.headers,
-            requestBody: config.body,
-
             status: result.status,
             statusText: result.statusText,
             responseHeaders: result.headers,
             responseBody: result.data,
             responseSize: result.size,
-            
             timings: result.timings,
             executedBy: userId,
         });
 
-        // 5. Return Response
-        res.status(200).json({
-            ...result,
-            historyId: executionLog._id, // Send back Mongo ID
-        });
+        res.status(200).json({ ...result, historyId: executionLog._id });
 
         } catch (error) {
         console.error('Execution Error:', error);
