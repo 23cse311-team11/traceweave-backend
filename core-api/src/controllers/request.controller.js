@@ -3,7 +3,7 @@ import { requestDefinitionService } from '../services/requestDefinition.service.
 import catchAsync from '../utils/catchAsync.js';
 import { executeHttpRequest } from '../services/http-runner.service.js';
 import ExecutionLog from '../models/execution.model.js';
-import { prisma } from '../config/prisma.js';
+import prisma from '../config/prisma.js';
 
 export const requestController = {
     createRequest: catchAsync(async (req, res) => {
@@ -96,6 +96,54 @@ export const requestController = {
         } catch (error) {
             console.error('Execution Error:', error);
             res.status(500).json({ error: 'Failed to execute request' });
+        }
+    }),
+
+    /**
+   * Path B: Execute Ad-Hoc Request (Scratchpad)
+   * Route: POST /execute (No ID in URL)
+   */
+  executeAdHocRequest: catchAsync(async (req, res) => {
+        try {
+        const userId = req.user.id;
+        // 1. We require workspaceId to enforce RBAC (Users can't just use our server as a free proxy)
+        const { workspaceId, method, url, headers, body, params, variables = {} } = req.body;
+
+        if (!workspaceId || !url || !method) {
+            return res.status(400).json({ error: 'Missing workspaceId, url, or method' });
+        }
+
+        // 2. Build Config directly from Body
+        let config = { method, url, headers, body, params };
+
+        // 3. (Future) Variable Substitution
+        // config = substituteVariables(config, variables);
+
+        // 4. Execute
+        const result = await executeHttpRequest(config);
+
+        // 5. Log History (Unlinked to any Request Definition)
+        // We store workspaceId so it appears in the "Workspace History"
+        const executionLog = await ExecutionLog.create({
+            requestId: null, // Null indicates Ad-Hoc
+            collectionId: null,
+            workspaceId: workspaceId,
+            method: config.method,
+            url: config.url,
+            status: result.status,
+            statusText: result.statusText,
+            responseHeaders: result.headers,
+            responseBody: result.data,
+            responseSize: result.size,
+            timings: result.timings,
+            executedBy: userId,
+        });
+
+        res.status(200).json({ ...result, historyId: executionLog._id });
+
+        } catch (error) {
+        console.error('Ad-Hoc Execution Error:', error);
+        res.status(500).json({ error: 'Failed to execute request' });
         }
     }),
 

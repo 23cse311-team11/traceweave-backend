@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const executionSchema = new mongoose.Schema({
-  requestId: { type: String, required: true, index: true }, // Refers to Postgres UUID
+  requestId: { type: String, index: true }, // Refers to Postgres UUID
   collectionId: { type: String, index: true },
   workspaceId: { type: String, index: true },
   
