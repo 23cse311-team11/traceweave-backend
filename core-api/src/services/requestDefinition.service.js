@@ -2,7 +2,6 @@ import prisma from '../config/prisma.js';
 import httpStatus from 'http-status';
 import ApiError from '../utils/ApiError.js';
 
-
 export const requestDefinitionService = {
     async createRequest({ collectionId, name, method, url, headers, body, params }) {
         if (!collectionId || !name || !method || !url) {
@@ -17,15 +16,25 @@ export const requestDefinitionService = {
             throw new ApiError(httpStatus.NOT_FOUND, 'Collection not found');
         }
 
+        // --- VALIDATION & SANITIZATION START ---
+        // Ensure headers/params are Objects. If string/null, default to {}.
+        const safeHeaders = (headers && typeof headers === 'object' && !Array.isArray(headers)) ? headers : {};
+        const safeParams = (params && typeof params === 'object' && !Array.isArray(params)) ? params : {};
+        
+        // Body can be string (raw), object (json), or null. 
+        // We ensure undefined becomes null to satisfy Prisma.
+        const safeBody = body !== undefined ? body : null;
+        // --- VALIDATION END ---
+
         return prisma.requestDefinition.create({
             data: {
                 collectionId,
                 name,
                 method,
                 url,
-                headers,
-                body,
-                params,
+                headers: safeHeaders,
+                body: safeBody,
+                params: safeParams,
             },
         });
     },
@@ -40,6 +49,10 @@ export const requestDefinitionService = {
     },
 
     async updateRequest(requestId, updateBody) {
+        // Sanitize update data if present
+        if (updateBody.headers && typeof updateBody.headers !== 'object') updateBody.headers = {};
+        if (updateBody.params && typeof updateBody.params !== 'object') updateBody.params = {};
+
         const request = await prisma.requestDefinition.findFirst({
             where: {
                 id: requestId,
