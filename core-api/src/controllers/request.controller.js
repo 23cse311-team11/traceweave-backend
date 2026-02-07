@@ -113,6 +113,20 @@ export const requestController = {
             return res.status(400).json({ error: 'Missing workspaceId, url, or method' });
         }
 
+        const member = await prisma.workspaceMember.findUnique({
+            where: {
+                workspaceId_userId: {
+                    workspaceId,
+                    userId
+                }
+            }
+        });
+
+        // Only EDITOR or OWNER can execute.
+        if (!member || (member.role !== 'EDITOR' && member.role !== 'OWNER')) {
+            return res.status(403).json({ error: 'You do not have permission to execute requests in this workspace' });
+        }
+
         // 2. Build Config directly from Body
         let config = { method, url, headers, body, params };
 
