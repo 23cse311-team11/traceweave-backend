@@ -102,4 +102,16 @@ export const requestController = {
         res.status(500).json({ error: 'Failed to execute request' });
         }
     }),
+
+    getRequestHistory: catchAsync(async (req, res) => {
+        try {
+            const { requestId } = req.params;
+            const history = await ExecutionLog.find({ requestId })
+                .sort({ createdAt: -1 })
+                .limit(20);
+            res.json(history);
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to fetch history' });
+        }
+    }),
 };

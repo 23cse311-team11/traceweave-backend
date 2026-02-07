@@ -32,4 +32,6 @@ router.delete('/:requestId', requireWorkspaceRole('OWNER'), requestController.de
 
 router.post('/:requestId/send', requireWorkspaceRole('VIEWER'), requestController.sendRequest);
 
+router.get('/:requestId/history', requireWorkspaceRole('VIEWER'), requestController.getRequestHistory);
+
 export default router;
