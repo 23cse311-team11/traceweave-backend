@@ -12,9 +12,14 @@ export const executeHttpRequest = (requestConfig) => {
     const { method, url, headers, body } = requestConfig;
 
     // 1. Parse URL to determine protocol and options
+    let normalizedUrl = url;
+    if (normalizedUrl && !/^https?:\/\//i.test(normalizedUrl)) {
+      normalizedUrl = `http://${normalizedUrl}`;
+    }
+
     let parsedUrl;
     try {
-      parsedUrl = new URL(url);
+      parsedUrl = new URL(normalizedUrl);
     } catch (err) {
       return resolve(createErrorResponse('Invalid URL format', 0));
     }
@@ -49,7 +54,7 @@ export const executeHttpRequest = (requestConfig) => {
       port: parsedUrl.port || (isHttps ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
       // Helper to force IPv4 if needed, usually auto
-      family: 4, 
+      family: 4,
     };
 
     // 4. Create Request
@@ -105,9 +110,9 @@ export const executeHttpRequest = (requestConfig) => {
         const buffer = Buffer.concat(dataChunks);
         let responseBody = buffer.toString('utf8');
         try {
-            responseBody = JSON.parse(responseBody);
+          responseBody = JSON.parse(responseBody);
         } catch (e) {
-            // Leave as string if not JSON
+          // Leave as string if not JSON
         }
 
         resolve({
@@ -135,7 +140,7 @@ export const executeHttpRequest = (requestConfig) => {
         req.write(body);
       }
     }
-    
+
     req.end();
   });
 };

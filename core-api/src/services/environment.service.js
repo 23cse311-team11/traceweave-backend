@@ -55,7 +55,7 @@ export const environmentService = {
 
     // Get Environments for Workspace (Filtered by access)
     async getWorkspaceEnvironments(workspaceId, userId) {
-        return prisma.environment.findMany({
+        const environments = await prisma.environment.findMany({
             where: {
                 workspaceId,
                 deletedAt: null,
@@ -67,11 +67,23 @@ export const environmentService = {
                 createdBy: {
                     select: { id: true, fullName: true, email: true },
                 },
+                variables: {
+                    where: { deletedAt: null },
+                },
                 _count: {
                     select: { variables: true },
                 },
             },
         });
+
+        // Decrypt variable values
+        return environments.map(env => ({
+            ...env,
+            variables: env.variables.map(v => ({
+                ...v,
+                value: v.isSecret ? '********' : decrypt(v.value),
+            })),
+        }));
     },
 
     // Delete Environment (Owner Only - Checked by Controller/Route)

@@ -24,13 +24,12 @@ connectMongo();
 
 // Global Middlewares
 app.use(helmet()); // Security headers
-app.use(cors()); // Enable CORS
 app.use(express.json()); // Parse JSON bodies
 app.use(morgan('dev')); // Logger
 app.use(cookieParser());
 app.use(cors({
-  origin: 'http://localhost:3000', 
-  credentials: true 
+  origin: 'http://localhost:3000',
+  credentials: true
 }));
 app.use(passport.initialize());
 
@@ -65,7 +64,7 @@ const startServer = async () => {
   } catch (error) {
     console.error('Unable to connect to the database:', error);
     process.exit(1);
- }
+  }
 };
 
 startServer();
