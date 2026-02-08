@@ -1,6 +1,5 @@
 import { CookieJar, Cookie } from 'tough-cookie';
 import CookieJarModel from '../models/cookie-jar.model.js';
-import { promisify } from 'util';
 
 /**
  * Loads cookies from Mongo into a fresh Tough-Cookie Jar

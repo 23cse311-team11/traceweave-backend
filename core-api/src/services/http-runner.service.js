@@ -1,4 +1,3 @@
-// backend/core-api/src/services/http-runner.service.js
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
@@ -6,108 +5,155 @@ import { URL } from 'url';
 /**
  * Executes an HTTP/HTTPS request with precise waterfall timings.
  * Captures: DNS, TCP, TLS, TTFB, Download, Total.
+ *
+ * @param {object} requestConfig
+ * @param {CookieJar} cookieJar - Optional tough-cookie jar instance
  */
-export const executeHttpRequest = (requestConfig) => {
-  return new Promise((resolve) => {
-    const { method, url, headers, body } = requestConfig;
+export const executeHttpRequest = (requestConfig, cookieJar = null) => {
+  return new Promise(async (resolve) => {
+    const {
+      method = 'GET',
+      url,
+      headers = {},
+      body
+    } = requestConfig;
 
-    // 1. Parse URL to determine protocol and options
     let parsedUrl;
     try {
       parsedUrl = new URL(url);
-    } catch (err) {
+    } catch {
       return resolve(createErrorResponse('Invalid URL format', 0));
+    }
+
+    const safeHeaders = { ...headers };
+
+    /* ===========================
+       COOKIE INJECTION
+    ============================ */
+    if (cookieJar) {
+      try {
+        const cookieString = await cookieJar.getCookieString(url);
+        if (cookieString) {
+          safeHeaders['Cookie'] = safeHeaders['Cookie']
+            ? `${safeHeaders['Cookie']}; ${cookieString}`
+            : cookieString;
+        }
+      } catch (err) {
+        console.error('Cookie Injection Error:', err);
+      }
     }
 
     const isHttps = parsedUrl.protocol === 'https:';
     const lib = isHttps ? https : http;
 
-    // 2. Prepare Timings Object (The Stopwatch)
+    /* ===========================
+       TIMINGS SETUP
+    ============================ */
     const timings = {
       start: Date.now(),
-      dnsLookup: 0,    // Domain -> IP
-      tcpConnection: 0,// Socket Connect
-      tlsHandshake: 0, // SSL Negotiation (HTTPS only)
-      firstByte: 0,    // TTFB (Server Processing)
-      download: 0,     // Content Transfer
-      total: 0,        // Total Duration
+      dnsLookup: 0,
+      tcpConnection: 0,
+      tlsHandshake: 0,
+      firstByte: 0,
+      download: 0,
+      total: 0,
     };
 
-    // Events timestamps
-    let dnsStart = timings.start;
     let dnsEnd = 0;
     let connectEnd = 0;
     let tlsEnd = 0;
     let responseStart = 0;
-    let end = 0;
 
-    // 3. Request Options
     const options = {
-      method: method || 'GET',
-      headers: headers || {},
+      method,
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || (isHttps ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
-      // Helper to force IPv4 if needed, usually auto
-      family: 4, 
+      headers: safeHeaders,
     };
 
-    // 4. Create Request
     const req = lib.request(options);
 
-    // --- SOCKET LIFECYCLE EVENTS ---
-    // A. DNS Lookup (socket assigned)
+    /* ===========================
+       SOCKET EVENTS
+    ============================ */
     req.on('socket', (socket) => {
       socket.on('lookup', () => {
         dnsEnd = Date.now();
-        timings.dnsLookup = dnsEnd - dnsStart;
+        timings.dnsLookup = dnsEnd - timings.start;
       });
 
-      // B. TCP Connection
       socket.on('connect', () => {
         connectEnd = Date.now();
-        // If DNS was cached/skipped, use start time
-        const referenceTime = dnsEnd || dnsStart;
-        timings.tcpConnection = connectEnd - referenceTime;
+
+        // DNS may be cached → lookup never fires
+        if (!dnsEnd) timings.dnsLookup = 0;
+
+        timings.tcpConnection =
+          connectEnd - (dnsEnd || timings.start);
       });
 
-      // C. TLS Handshake (HTTPS only)
       if (isHttps) {
         socket.on('secureConnect', () => {
           tlsEnd = Date.now();
-          timings.tlsHandshake = tlsEnd - connectEnd;
+          if (connectEnd) {
+            timings.tlsHandshake = tlsEnd - connectEnd;
+          }
         });
       }
     });
 
-    // 5. Response Handling
+    /* ===========================
+       RESPONSE HANDLING
+    ============================ */
     req.on('response', (res) => {
-      // D. TTFB (Time To First Byte)
       responseStart = Date.now();
-      const handshakeEnd = isHttps ? tlsEnd : connectEnd;
+
+      const handshakeEnd =
+        (isHttps && tlsEnd)
+          ? tlsEnd
+          : connectEnd || timings.start;
+
       timings.firstByte = responseStart - handshakeEnd;
 
-      let dataChunks = [];
-      let totalSize = 0;
+      const chunks = [];
+      let size = 0;
 
-      // E. Download Body
       res.on('data', (chunk) => {
-        dataChunks.push(chunk);
-        totalSize += chunk.length;
+        chunks.push(chunk);
+        size += chunk.length;
       });
 
       res.on('end', () => {
-        end = Date.now();
+        const end = Date.now();
+
         timings.download = end - responseStart;
         timings.total = end - timings.start;
 
-        // Parse Body (Try JSON, fallback to text)
-        const buffer = Buffer.concat(dataChunks);
-        let responseBody = buffer.toString('utf8');
+        const buffer = Buffer.concat(chunks);
+        let data = buffer.toString('utf8');
+
         try {
-            responseBody = JSON.parse(responseBody);
-        } catch (e) {
-            // Leave as string if not JSON
+          data = JSON.parse(data);
+        } catch {
+          // leave as string
+        }
+
+        /* ===========================
+           COOKIE EXTRACTION
+        ============================ */
+        if (cookieJar && res.headers['set-cookie']) {
+          const rawCookies = Array.isArray(res.headers['set-cookie'])
+            ? res.headers['set-cookie']
+            : [res.headers['set-cookie']];
+
+          for (const c of rawCookies) {
+            try {
+              cookieJar.setCookieSync(c, url);
+            } catch (err) {
+              console.error('Cookie Parse Error:', err);
+            }
+          }
         }
 
         resolve({
@@ -115,32 +161,39 @@ export const executeHttpRequest = (requestConfig) => {
           status: res.statusCode,
           statusText: res.statusMessage,
           headers: res.headers,
-          data: responseBody,
-          size: totalSize,
-          timings
+          data,
+          size,
+          timings,
         });
       });
     });
 
-    // 6. Error Handling
+    /* ===========================
+       ERROR HANDLING
+    ============================ */
     req.on('error', (err) => {
       resolve(createErrorResponse(err.message, Date.now() - timings.start));
     });
 
-    // 7. Send Body (if exists)
-    if (body) {
-      if (typeof body === 'object') {
+    /* ===========================
+       SEND BODY
+    ============================ */
+    if (body !== undefined && body !== null) {
+      if (typeof body === 'object' && !Buffer.isBuffer(body)) {
+        safeHeaders['Content-Type'] ||= 'application/json';
         req.write(JSON.stringify(body));
       } else {
         req.write(body);
       }
     }
-    
+
     req.end();
   });
 };
 
-// Helper for Errors
+/* ===========================
+   ERROR RESPONSE HELPER
+============================ */
 const createErrorResponse = (message, totalTime) => ({
   success: false,
   status: 0,
@@ -149,8 +202,12 @@ const createErrorResponse = (message, totalTime) => ({
   data: { error: message },
   size: 0,
   timings: {
-    start: 0, dnsLookup: 0, tcpConnection: 0,
-    tlsHandshake: 0, firstByte: 0, download: 0,
-    total: totalTime
-  }
+    start: 0,
+    dnsLookup: 0,
+    tcpConnection: 0,
+    tlsHandshake: 0,
+    firstByte: 0,
+    download: 0,
+    total: totalTime,
+  },
 });
