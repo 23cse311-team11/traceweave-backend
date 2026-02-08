@@ -4,6 +4,8 @@ import catchAsync from '../utils/catchAsync.js';
 import { executeHttpRequest } from '../services/http-runner.service.js';
 import ExecutionLog from '../models/execution.model.js';
 import prisma from '../config/prisma.js';
+import { environmentService } from '../services/environment.service.js';
+import { substituteVariables } from '../services/variableSubstitution.service.js';
 
 export const requestController = {
     createRequest: catchAsync(async (req, res) => {
@@ -46,7 +48,7 @@ export const requestController = {
 
             // If the user sends a POST without a body (or Content-Type issues), req.body is undefined.
             // We default to {} to prevent "Cannot destructure property 'overrides' of undefined".
-            const { overrides = {}, variables = {} } = req.body || {};
+            const { overrides = {}, environmentId } = req.body || {};
 
             // 2. Fetch Source of Truth
             const requestDef = await prisma.requestDefinition.findUnique({
@@ -57,6 +59,8 @@ export const requestController = {
             if (!requestDef) {
                 return res.status(404).json({ error: 'Request definition not found' });
             }
+
+            const workspaceId = requestDef.collection.workspaceId;
 
             // 3. Merge: Database Config + Overrides
             // We use '??' (Nullish Coalescing) instead of '||' so that if user sends overrides.body = "" (empty string),
@@ -69,8 +73,15 @@ export const requestController = {
                 params: overrides.params ?? requestDef.params ?? {},
             };
 
-            // 4. (Future) Variable Substitution
-            // config = substituteVariables(config, variables);
+            // 4. Variable Substitution (if environmentId provided)
+            if (environmentId) {
+                const variables = await environmentService.getVariablesForExecution(
+                    environmentId,
+                    userId,
+                    workspaceId
+                );
+                config = substituteVariables(config, variables);
+            }
 
             // 5. Execute
             const result = await executeHttpRequest(config);
@@ -79,7 +90,8 @@ export const requestController = {
             const executionLog = await ExecutionLog.create({
                 requestId: requestDef.id,
                 collectionId: requestDef.collectionId,
-                workspaceId: requestDef.collection.workspaceId,
+                workspaceId: workspaceId,
+                environmentId: environmentId || null,
                 method: config.method,
                 url: config.url,
                 status: result.status,
@@ -95,7 +107,7 @@ export const requestController = {
 
         } catch (error) {
             console.error('Execution Error:', error);
-            res.status(500).json({ error: 'Failed to execute request' });
+            res.status(500).json({ error: error.message || 'Failed to execute request' });
         }
     }),
 
@@ -107,7 +119,7 @@ export const requestController = {
         try {
             const userId = req.user.id;
             // 1. We require workspaceId to enforce RBAC (Users can't just use our server as a free proxy)
-            const { workspaceId, method, url, headers, body, params, variables = {} } = req.body;
+            const { workspaceId, method, url, headers, body, params, environmentId } = req.body;
 
             if (!workspaceId || !url || !method) {
                 return res.status(400).json({ error: 'Missing workspaceId, url, or method' });
@@ -130,8 +142,15 @@ export const requestController = {
             // 2. Build Config directly from Body
             let config = { method, url, headers, body, params };
 
-            // 3. (Future) Variable Substitution
-            // config = substituteVariables(config, variables);
+            // 3. Variable Substitution (if environmentId provided)
+            if (environmentId) {
+                const variables = await environmentService.getVariablesForExecution(
+                    environmentId,
+                    userId,
+                    workspaceId
+                );
+                config = substituteVariables(config, variables);
+            }
 
             // 4. Execute
             const result = await executeHttpRequest(config);
@@ -142,6 +161,7 @@ export const requestController = {
                 requestId: null, // Null indicates Ad-Hoc
                 collectionId: null,
                 workspaceId: workspaceId,
+                environmentId: environmentId || null,
                 method: config.method,
                 url: config.url,
                 status: result.status,
@@ -157,7 +177,7 @@ export const requestController = {
 
         } catch (error) {
             console.error('Ad-Hoc Execution Error:', error);
-            res.status(500).json({ error: 'Failed to execute request' });
+            res.status(500).json({ error: error.message || 'Failed to execute request' });
         }
     }),
 

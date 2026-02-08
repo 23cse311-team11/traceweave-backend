@@ -348,5 +348,62 @@ export const environmentService = {
             where: { id: variableId },
             data: { key: newKey },
         });
+    },
+
+    /**
+     * Get variables for request execution
+     * Validates access and returns decrypted key-value map
+     * @param {string} environmentId - Environment ID
+     * @param {string} userId - User ID
+     * @param {string} workspaceId - Workspace ID for validation
+     * @returns {Object} - Key-value map of variables
+     */
+    async getVariablesForExecution(environmentId, userId, workspaceId) {
+        // 1. Fetch environment and validate it belongs to the workspace
+        const environment = await prisma.environment.findUnique({
+            where: { id: environmentId },
+        });
+
+        if (!environment) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Environment not found');
+        }
+
+        if (environment.workspaceId !== workspaceId) {
+            throw new ApiError(
+                httpStatus.FORBIDDEN,
+                'Environment does not belong to this workspace'
+            );
+        }
+
+        if (environment.deletedAt) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Environment has been deleted');
+        }
+
+        // 2. Check user has access via UserEnvironment table
+        const userAccess = await prisma.userEnvironment.findUnique({
+            where: {
+                userId_environmentId: { userId, environmentId },
+            },
+        });
+
+        if (!userAccess) {
+            throw new ApiError(
+                httpStatus.FORBIDDEN,
+                'You do not have access to this environment'
+            );
+        }
+
+        // 3. Fetch all variables and decrypt them
+        const variables = await prisma.environmentVariable.findMany({
+            where: { environmentId, deletedAt: null },
+        });
+
+        // 4. Build key-value map with decrypted values
+        const variableMap = {};
+        for (const variable of variables) {
+            variableMap[variable.key] = decrypt(variable.value);
+        }
+
+        return variableMap;
     }
 };
