@@ -98,11 +98,17 @@ export const addMemberToWorkspace = async (req, res, next) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
+    const normalizedRole = role ? role.toUpperCase() : 'VIEWER';
+
+    if (!['OWNER', 'EDITOR', 'VIEWER'].includes(normalizedRole)) {
+      return res.status(400).json({ message: 'Invalid role. Must be OWNER, EDITOR, or VIEWER' });
+    }
+
     const member = await workspaceService.addMember(
       workspaceId,
       userId,
       email,
-      role
+      normalizedRole
     );
 
     res.status(201).json({
@@ -138,16 +144,18 @@ export const updateMemberRole = async (req, res, next) => {
   try {
     const { workspaceId, userId: memberUserId } = req.params;
     const { role } = req.body;
-    const currentUserId = req.user.id; // Not strictly needed for service call if role check done at route, but good for context if needed later
+    const currentUserId = req.user.id;
 
-    if (!role || !['EDITOR', 'VIEWER'].includes(role)) {
+    const normalizedRole = role ? role.toUpperCase() : null;
+
+    if (!normalizedRole || !['EDITOR', 'VIEWER'].includes(normalizedRole)) {
       return res.status(400).json({ message: 'Valid role (EDITOR, VIEWER) is required' });
     }
 
     const updatedMember = await workspaceService.updateMemberRole(
       workspaceId,
       memberUserId,
-      role
+      normalizedRole
     );
 
     res.status(200).json({

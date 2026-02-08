@@ -23,6 +23,10 @@ model User {
   identities    Identity[]        // <--- One User, Many Login Methods
   workspaces    WorkspaceMember[]
   ownedWorkspaces Workspace[]
+  
+  createdEnvironments Environment[]
+  createdVariables    EnvironmentVariable[]
+  accessibleEnvironments UserEnvironment[]
 
   @@map("users")
 }
@@ -65,6 +69,8 @@ model Workspace {
   owner       User     @relation(fields: [ownerId], references: [id])
   members     WorkspaceMember[]
   collections Collection[]
+  environments Environment[]
+  userEnvironments UserEnvironment[]
 
   @@map("workspaces")
 }
@@ -123,4 +129,60 @@ model RequestDefinition {
   collection   Collection @relation(fields: [collectionId], references: [id])
 
   @@map("request_definitions")
+}
+
+// OP-370: Environments & Variables
+model Environment {
+  id           String   @id @default(uuid())
+  workspaceId  String   @map("workspace_id")
+  name         String
+  isPersistent Boolean  @default(false) @map("is_persistent")
+  createdById  String   @map("created_by")
+  
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  // Relations
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdBy    User      @relation(fields: [createdById], references: [id])
+  variables    EnvironmentVariable[]
+  userEnvironments UserEnvironment[]
+
+  @@map("environments")
+}
+
+model UserEnvironment {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  workspaceId   String      @map("workspace_id")
+  environmentId String      @map("environment_id")
+
+  // Relations
+  user          User        @relation(fields: [userId], references: [id])
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id])
+  environment   Environment @relation(fields: [environmentId], references: [id])
+
+  @@unique([userId, environmentId])
+  @@map("user_environments")
+}
+
+model EnvironmentVariable {
+  id            String      @id @default(uuid())
+  environmentId String      @map("environment_id")
+  key           String
+  value         String      // Encrypted if isSecret
+  isSecret      Boolean     @default(false) @map("is_secret")
+  createdById   String      @map("created_by")
+
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  deletedAt     DateTime?   @map("deleted_at")
+
+  // Relations
+  environment   Environment @relation(fields: [environmentId], references: [id])
+  createdBy     User        @relation(fields: [createdById], references: [id])
+
+  @@unique([environmentId, key])
+  @@map("environment_variables")
 }

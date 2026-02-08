@@ -36,17 +36,14 @@ export const workspaceService = {
         },
       });
     } catch (error) {
-      // 1. Log the full error for your internal debugging
       console.error("--- PRISMA ERROR DEBUG ---");
-      console.error("Code:", error.code); // e.g., P2002, P2025
+      console.error("Code:", error.code);
       console.error("Message:", error.message);
 
-      // 2. Identify specific Prisma errors (Optional but helpful)
       if (error.code === 'P2025') {
         throw new ApiError(httpStatus.NOT_FOUND, 'User (Owner) not found');
       }
 
-      // 3. Re-throw as an ApiError so your global error handler catches it
       throw new ApiError(
         httpStatus.INTERNAL_SERVER_ERROR,
         `Failed to create workspace: ${error.message.split('\n').at(-1)}`
@@ -115,6 +112,8 @@ export const workspaceService = {
   },
 
   async addMember(workspaceId, userId, memberEmail, role = 'VIEWER') {
+    const normalizedRole = role.toUpperCase();
+
     const workspace = await prisma.workspace.findFirst({
       where: {
         id: workspaceId,
@@ -124,17 +123,8 @@ export const workspaceService = {
     });
 
     if (!workspace) {
-      // With route-level checks, this might be redundant if we blindly trust route middleware,
-      // but logic-wise: "Only the owner can add members".
-      // If middleware already checked OWNER, this fetch acts as a double-check or just fetches data.
-      // However, to strictly follow "remove service level checks", 
-      // I will rely on the caller/middleware having done the check, 
-      // OR keeps basic existence checks.
-      // Let's keep the business logic correct: "addMember" implies permission.
+      throw new ApiError(httpStatus.NOT_FOUND, 'Workspace not found or access denied');
     }
-
-    // Since we are moving to route-level, I will remove the explicit checkWorkspacePermission call
-    // and rely on the controller/route to have enforced it.
 
     const userToAdd = await prisma.user.findUnique({
       where: { email: memberEmail },
@@ -145,11 +135,11 @@ export const workspaceService = {
     }
 
     try {
-      return await prisma.workspaceMember.create({
+      const newMember = await prisma.workspaceMember.create({
         data: {
           workspaceId,
           userId: userToAdd.id,
-          role,
+          role: normalizedRole,
         },
         include: {
           user: {
@@ -161,6 +151,23 @@ export const workspaceService = {
           },
         },
       });
+
+      const persistentEnvs = await prisma.environment.findMany({
+        where: { workspaceId, isPersistent: true, deletedAt: null },
+      });
+
+      if (persistentEnvs.length > 0) {
+        await prisma.userEnvironment.createMany({
+          data: persistentEnvs.map((env) => ({
+            userId: userToAdd.id,
+            workspaceId,
+            environmentId: env.id,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return newMember;
     } catch (error) {
       if (error.code === 'P2002') {
         throw new ApiError(
@@ -177,7 +184,6 @@ export const workspaceService = {
       where: { id: workspaceId }
     });
 
-    // Logic: Owner cannot remove themselves.
     if (memberUserId === workspace.ownerId) {
       throw new ApiError(
         httpStatus.BAD_REQUEST,
@@ -209,7 +215,6 @@ export const workspaceService = {
   },
 
   async deleteWorkspace(workspaceId, userId) {
-    // Permission checked at route level.
     return prisma.workspace.update({
       where: { id: workspaceId },
       data: { deletedAt: new Date() },
@@ -217,7 +222,6 @@ export const workspaceService = {
   },
 
   async updateWorkspace(workspaceId, userId, updateBody) {
-    // Permission checked at route level.
     return prisma.workspace.update({
       where: { id: workspaceId },
       data: updateBody,
@@ -238,6 +242,8 @@ export const workspaceService = {
     });
   },
   async updateMemberRole(workspaceId, memberUserId, newRole) {
+    const normalizedRole = newRole.toUpperCase();
+
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId }
     });
@@ -269,7 +275,7 @@ export const workspaceService = {
           userId: memberUserId,
         },
       },
-      data: { role: newRole },
+      data: { role: normalizedRole },
       include: {
         user: {
           select: {

@@ -5,7 +5,6 @@ import catchAsync from '../utils/catchAsync.js';
 
 export const requestController = {
     createRequest: catchAsync(async (req, res) => {
-        // collectionId comes from params now due to route change for specific RBAC scoping
         const { collectionId } = req.params;
         const request = await requestDefinitionService.createRequest({
             ...req.body,
@@ -15,9 +14,7 @@ export const requestController = {
     }),
 
     getRequestsByCollection: catchAsync(async (req, res) => {
-        // Updated service might not strictly require userId for read yet if we didn't enforce it there,
-        // but let's pass it for consistency or future use.
-        // Actually I didn't add userId param to getRequestsByCollection in service, so I'll leave it.
+
         const requests = await requestDefinitionService.getRequestsByCollection(
             req.params.collectionId
         );
@@ -43,7 +40,8 @@ export const requestController = {
 
     sendRequest: catchAsync(async (req, res) => {
         const { requestId } = req.params;
-        const response = await sendRequestService.sendRequest(requestId);
+        const { environmentId } = req.body;
+        const response = await sendRequestService.sendRequest(requestId, environmentId, req.user.id);
         res.send(response);
     }),
 };

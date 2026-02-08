@@ -11,27 +11,27 @@ import {
   updateMemberRole
 } from '../controllers/workspace.controller.js';
 
+import {
+  createEnvironment,
+  getWorkspaceEnvironments
+} from '../controllers/environment.controller.js';
+
 import { requireWorkspaceRole } from '../middlewares/rbac.middleware.js';
 
 const router = express.Router();
 
-// Protect all workspace routes
 router.use(authMiddleware);
 
 router.post('/create', createWorkspace);
 
 router.get('/', getMyWorkspaces);
 
-// Viewer Role
 router.get('/:workspaceId', requireWorkspaceRole('VIEWER'), getWorkspaceById);
 
-// Owner Role for delete
 router.delete('/:workspaceId', requireWorkspaceRole('OWNER'), deleteWorkspace);
 
-// Editor Role for update
 router.patch('/:workspaceId', requireWorkspaceRole('EDITOR'), updateWorkspace);
 
-// Owner Role for Member Management
 router.post('/:workspaceId/members', requireWorkspaceRole('OWNER'), addMemberToWorkspace);
 
 router.delete(
@@ -46,5 +46,8 @@ router.patch(
   updateMemberRole
 );
 
+router.post('/:workspaceId/environments', requireWorkspaceRole('EDITOR'), createEnvironment);
+router.get('/:workspaceId/environments', requireWorkspaceRole('VIEWER'), getWorkspaceEnvironments);
 
 export default router;
+
