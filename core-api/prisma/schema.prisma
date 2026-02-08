@@ -7,6 +7,11 @@ datasource db {
   provider  = "postgresql"
 }
         
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
 
 // OP-347: User Auth
 model User {
@@ -65,6 +70,7 @@ model Workspace {
   owner       User     @relation(fields: [ownerId], references: [id])
   members     WorkspaceMember[]
   collections Collection[]
+  workflows   Workflow[]
 
   @@map("workspaces")
 }
@@ -74,7 +80,7 @@ model WorkspaceMember {
   id          String   @id @default(uuid())
   workspaceId String   @map("workspace_id")
   userId      String   @map("user_id")
-  role        String   @default("VIEWER") // OWNER, EDITOR, VIEWER
+  role        WorkspaceRole   @default(VIEWER) // OWNER, EDITOR, VIEWER
 
   joinedAt    DateTime @default(now()) @map("joined_at")
 
@@ -123,4 +129,27 @@ model RequestDefinition {
   collection   Collection @relation(fields: [collectionId], references: [id])
 
   @@map("request_definitions")
+}
+
+// OP-370: Workflows
+model Workflow {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  description String?
+  
+  // JSON Structure:
+  // [
+  //   { "requestId": "uuid", "name": "Login", "stopOnFailure": true },
+  //   { "requestId": "uuid", "name": "Get Profile" }
+  // ]
+  steps       Json     
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@map("workflows")
 }

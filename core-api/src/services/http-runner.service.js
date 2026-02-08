@@ -55,8 +55,7 @@ export const executeHttpRequest = (requestConfig) => {
     // 4. Create Request
     const req = lib.request(options);
 
-    // --- SOCKET LIFECYCLE EVENTS (The Magic) ---
-
+    // --- SOCKET LIFECYCLE EVENTS ---
     // A. DNS Lookup (socket assigned)
     req.on('socket', (socket) => {
       socket.on('lookup', () => {
