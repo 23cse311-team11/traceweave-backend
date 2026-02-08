@@ -4,6 +4,7 @@ import uploadRoute from './upload.routes.js';
 import collectionRoute from './collection.route.js';
 import workspaceRoute from './workspace.routes.js';
 import requestRoute from './request.route.js';
+import environmentRoute from './environment.routes.js';
 const router = express.Router();
 
 const defaultRoutes = [
@@ -27,6 +28,10 @@ const defaultRoutes = [
     path: '/requests',
     route: requestRoute,
   },
+  {
+    path: '/environments',
+    route: environmentRoute,
+  }
 
 ];
 

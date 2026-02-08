@@ -5,7 +5,7 @@ import { checkWorkspacePermission } from '../utils/rbac.utils.js';
 
 /**
  * Middleware to enforce workspace role requirements.
- * Resolves workspaceId from params: workspaceId, collectionId, or requestId.
+ * Resolves workspaceId from params: workspaceId, collectionId, requestId, or environmentId.
  * @param {string} requiredRole - 'OWNER', 'EDITOR', 'VIEWER'
  */
 export const requireWorkspaceRole = (requiredRole) => async (req, res, next) => {
@@ -24,7 +24,7 @@ export const requireWorkspaceRole = (requiredRole) => async (req, res, next) => 
                     throw new ApiError(httpStatus.NOT_FOUND, 'Collection not found');
                 }
                 workspaceId = collection.workspaceId;
-                req.collection = collection; // Optimization
+                req.collection = collection;
             } else if (req.params.requestId) {
                 const request = await prisma.requestDefinition.findUnique({
                     where: { id: req.params.requestId },
@@ -37,7 +37,17 @@ export const requireWorkspaceRole = (requiredRole) => async (req, res, next) => 
                     throw new ApiError(httpStatus.NOT_FOUND, 'Request collection not found');
                 }
                 workspaceId = request.collection.workspaceId;
-                req.requestDefinition = request; // Optimization
+                req.requestDefinition = request;
+            } else if (req.params.environmentId) {
+                const environment = await prisma.environment.findUnique({
+                    where: { id: req.params.environmentId },
+                    select: { workspaceId: true },
+                });
+                if (!environment) {
+                    throw new ApiError(httpStatus.NOT_FOUND, 'Environment not found');
+                }
+                workspaceId = environment.workspaceId;
+                req.environment = environment;
             }
         }
 

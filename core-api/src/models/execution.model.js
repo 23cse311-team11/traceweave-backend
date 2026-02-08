@@ -4,7 +4,8 @@ const executionSchema = new mongoose.Schema({
   requestId: { type: String, index: true }, // Refers to Postgres UUID
   collectionId: { type: String, index: true },
   workspaceId: { type: String, index: true },
-  
+  environmentId: { type: String, index: true }, // Environment used for variable substitution
+
   // Request Details (Snapshot of what was sent)
   method: String,
   url: String,
@@ -27,7 +28,7 @@ const executionSchema = new mongoose.Schema({
     download: Number,  // Content Download
     total: Number      // Total Duration
   },
-  
+
   executedBy: String, // User UUID
   createdAt: { type: Date, default: Date.now }
 });
