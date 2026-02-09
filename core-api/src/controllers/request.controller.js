@@ -46,14 +46,21 @@ export const requestController = {
             const { requestId } = req.params;
             const userId = req.user.id;
 
+            // More permissive ID check to avoid blocking valid IDs while still preventing junk
+            if (!requestId || requestId.length < 5) {
+                return res.status(400).json({ error: 'Invalid Request ID format' });
+            }
+
             // If the user sends a POST without a body (or Content-Type issues), req.body is undefined.
-            // We default to {} to prevent "Cannot destructure property 'overrides' of undefined".
             const { overrides = {}, environmentId } = req.body || {};
 
             // 2. Fetch Source of Truth
             const requestDef = await prisma.requestDefinition.findUnique({
                 where: { id: requestId },
                 include: { collection: true },
+            }).catch(err => {
+                // If Prisma specifically fails due to ID format, catch it here
+                throw new Error(`Invalid ID lookup: ${err.message}`);
             });
 
             if (!requestDef) {
@@ -63,8 +70,6 @@ export const requestController = {
             const workspaceId = requestDef.collection.workspaceId;
 
             // 3. Merge: Database Config + Overrides
-            // We use '??' (Nullish Coalescing) instead of '||' so that if user sends overrides.body = "" (empty string),
-            // it is RESPECTED instead of falling back to DB value.
             let config = {
                 method: overrides.method ?? requestDef.method,
                 url: overrides.url ?? requestDef.url,
@@ -73,7 +78,7 @@ export const requestController = {
                 params: overrides.params ?? requestDef.params ?? {},
             };
 
-            // 4. Variable Substitution (if environmentId provided)
+            // 4. Variable Substitution
             if (environmentId) {
                 const variables = await environmentService.getVariablesForExecution(
                     environmentId,
@@ -103,11 +108,18 @@ export const requestController = {
                 executedBy: userId,
             });
 
-            res.status(200).json({ ...result, historyId: executionLog._id });
+            res.status(200).json({
+                ...result,
+                time: result.timings.total,
+                historyId: executionLog._id
+            });
 
         } catch (error) {
             console.error('Execution Error:', error);
-            res.status(500).json({ error: error.message || 'Failed to execute request' });
+            const isPrismaError = error.message?.toLowerCase().includes('prisma');
+            res.status(500).json({
+                error: isPrismaError ? 'Internal database error during execution' : (error.message || 'Failed to execute request')
+            });
         }
     }),
 
@@ -121,8 +133,8 @@ export const requestController = {
             // 1. We require workspaceId to enforce RBAC (Users can't just use our server as a free proxy)
             const { workspaceId, method, url, headers, body, params, environmentId } = req.body;
 
-            if (!workspaceId || !url || !method) {
-                return res.status(400).json({ error: 'Missing workspaceId, url, or method' });
+            if (!workspaceId || workspaceId.length < 5 || !url || !method) {
+                return res.status(400).json({ error: 'Missing or invalid workspaceId, url, or method' });
             }
 
             const member = await prisma.workspaceMember.findUnique({
@@ -132,6 +144,8 @@ export const requestController = {
                         userId
                     }
                 }
+            }).catch(err => {
+                throw new Error(`Workspace member lookup failed: ${err.message}`);
             });
 
             // Only EDITOR or OWNER can execute.
@@ -173,7 +187,11 @@ export const requestController = {
                 executedBy: userId,
             });
 
-            res.status(200).json({ ...result, historyId: executionLog._id });
+            res.status(200).json({
+                ...result,
+                time: result.timings.total,
+                historyId: executionLog._id
+            });
 
         } catch (error) {
             console.error('Ad-Hoc Execution Error:', error);

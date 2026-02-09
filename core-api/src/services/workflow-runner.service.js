@@ -82,6 +82,7 @@ export const executeWorkflow = async (workflowId, userId, runtimeVariables = {})
       requestName: requestDef.name,
       status: result.status,
       executionTime: result.timings.total,
+      timings: result.timings, // Added to allow frontend to check for 'Live' data
       success: result.success || (result.status >= 200 && result.status < 300),
       historyId: executionLog._id.toString()
     });
@@ -91,7 +92,7 @@ export const executeWorkflow = async (workflowId, userId, runtimeVariables = {})
       isSuccess = false;
       break;
     }
-    
+
     // Optional: Implement Delay here if step.delay exists
   }
 

@@ -19,6 +19,12 @@ export const deleteEnvironment = catchAsync(async (req, res) => {
     res.status(httpStatus.NO_CONTENT).send();
 });
 
+export const updateEnvironment = catchAsync(async (req, res) => {
+    const { environmentId } = req.params;
+    const environment = await environmentService.updateEnvironment(environmentId, req.user.id, req.body);
+    res.send(environment);
+});
+
 export const togglePersistent = catchAsync(async (req, res) => {
     const { environmentId } = req.params;
     const { isPersistent } = req.body;

@@ -3,6 +3,7 @@ import authMiddleware from '../middlewares/auth.middleware.js';
 import { requireWorkspaceRole } from '../middlewares/rbac.middleware.js';
 import {
     deleteEnvironment,
+    updateEnvironment,
     togglePersistent,
     createVariable,
     getVariables,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.delete('/:environmentId', requireWorkspaceRole('OWNER'), deleteEnvironment);
+router.patch('/:environmentId', updateEnvironment);
 router.patch('/:environmentId/persistent', togglePersistent);
 
 router.post('/:environmentId/variables', createVariable);
