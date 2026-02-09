@@ -1,7 +1,6 @@
 import express from 'express';
 import { requestController } from '../controllers/request.controller.js';
 import authenticateUser from '../middlewares/auth.middleware.js';
-
 import { requireWorkspaceRole } from '../middlewares/rbac.middleware.js';
 
 const router = express.Router();

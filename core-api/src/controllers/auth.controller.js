@@ -1,10 +1,11 @@
 import httpStatus from 'http-status';
 import { createUser, loginUserWithEmailAndPassword, getUserById } from '../services/auth.service.js';
 import { generateAuthTokens } from '../services/token.service.js';
+import { clearUserCookies } from '../services/cookie.service.js';
 import config from '../config/config.js';
 
 const catchAsync = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch((err) => next(err));
+  return Promise.resolve(fn(req, res, next)).catch((err) => next(err));
 };
 
 export const register = catchAsync(async (req, res) => {
@@ -47,4 +48,16 @@ export const getMe = async (req, res) => {
     isAuthenticated: true,
     user,
   });
+};
+
+export const logout = async (req, res) => {
+  // 1. Clear the Auth Token (Cookie)
+  res.clearCookie('token');
+
+  // 2. Clear the Request Cookie Jar for this user
+  if (req.user && req.user.id) {
+    await clearUserCookies(req.user.id);
+  }
+
+  res.json({ message: 'Logged out successfully' });
 };

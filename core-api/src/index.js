@@ -20,17 +20,15 @@ import connectMongo from "./config/mongo.js";
 
 const app = express();
 
-connectMongo();
-
 // Global Middlewares
 app.use(helmet()); // Security headers
+app.use(cors({
+  origin: config.clientUrl, 
+  credentials: true 
+}));
 app.use(express.json()); // Parse JSON bodies
 app.use(morgan('dev')); // Logger
 app.use(cookieParser());
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
 app.use(passport.initialize());
 
 // Routes (Placeholder)
@@ -55,6 +53,7 @@ let server;
 
 const startServer = async () => {
   try {
+    await connectMongo();
     await prisma.$connect();
     console.log('PostgreSQL Connection has been established successfully.');
 

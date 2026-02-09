@@ -11,4 +11,8 @@ export default {
     secret: process.env.JWT_SECRET || 'secret',
     accessExpirationMinutes: process.env.JWT_ACCESS_EXPIRATION_MINUTES || 60 * 24 * 30,
   },
+  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+  mongoose: {
+    autoIndex: process.env.NODE_ENV !== 'production',
+  },
 };

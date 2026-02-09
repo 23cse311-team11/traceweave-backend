@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 
+import config from './config.js';
+
 const connectMongo = async () => {
   if (mongoose.connection.readyState >= 1) {
     return;
@@ -15,7 +17,7 @@ const connectMongo = async () => {
 
   try {
     await mongoose.connect(mongoUri, {
-      autoIndex: true
+      autoIndex: config.mongoose.autoIndex,
     });
     console.log('✅ MongoDB Atlas Connected (Logs & History)');
   } catch (error) {
