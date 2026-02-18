@@ -2,12 +2,19 @@ import express from 'express';
 import { requestController } from '../controllers/request.controller.js';
 import authenticateUser from '../middlewares/auth.middleware.js';
 import { requireWorkspaceRole } from '../middlewares/rbac.middleware.js';
+import { cookieController } from '../controllers/cookie.controller.js';
 
 const router = express.Router();
 
 router.use(authenticateUser);
 
 router.post('/execute', requireWorkspaceRole('EDITOR'), requestController.executeAdHocRequest);
+
+router.get('/jar/cookies', cookieController.getCookies);
+
+router.delete('/jar/cookies/:cookieId', cookieController.deleteCookie);
+
+router.delete('/jar/cookies', cookieController.clearCookies);
 
 router.post('/:collectionId', requireWorkspaceRole('EDITOR'), requestController.createRequest);
 
