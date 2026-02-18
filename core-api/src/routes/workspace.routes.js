@@ -51,7 +51,6 @@ router.get(
   '/:workspaceId/history',
   requireWorkspaceRole('VIEWER'),
   getWorkspaceHistory
-
 );
 
 router.post('/:workspaceId/environments', requireWorkspaceRole('EDITOR'), createEnvironment);
@@ -59,4 +58,3 @@ router.get('/:workspaceId/environments', requireWorkspaceRole('VIEWER'), getWork
 
 
 export default router;
-

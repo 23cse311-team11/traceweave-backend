@@ -172,47 +172,53 @@ export const requestController = {
                 return res.status(403).json({ error: 'You do not have permission to execute requests in this workspace' });
             }
 
-            // 2. Build Config directly from Body
+            // Build Config directly from Body
             let config = { method, url, headers, body, params };
 
-    // 2. Variable substitution
-    if (environmentId) {
-      const variables = await environmentService.getVariablesForExecution(
-        environmentId,
-        userId,
-        workspaceId
-      );
-      config = substituteVariables(config, variables);
-    }
+            // 2. Variable substitution
+            if (environmentId) {
+              const variables = await environmentService.getVariablesForExecution(
+                environmentId,
+                userId,
+                workspaceId
+              );
+              config = substituteVariables(config, variables);
+            }
 
-    // 3. LOAD COOKIE JAR
-    const domain = new URL(config.url).hostname;
-    const jar = await loadCookieJar(userId, workspaceId, domain);
+            // 3. LOAD COOKIE JAR
+            const domain = new URL(config.url).hostname;
+            let jar = null;
+            try {
+                const urlObj = new URL(config.url.includes('://') ? config.url : `http://${config.url}`);
+                jar = await loadCookieJar(userId, workspaceId, urlObj.hostname);
+            } catch (e) {
+                console.warn("Invalid URL for Cookie Jar:", config.url);
+            }
 
-    // 4. EXECUTE
-    const result = await executeHttpRequest(config, jar);
+            // 4. EXECUTE
+            const result = await executeHttpRequest(config, jar);
 
-    // 5. SAVE COOKIES
-    if (result.headers?.['set-cookie']) {
-      await persistCookieJar(jar, userId, workspaceId, config.url);
-    }
+            // 5. SAVE COOKIES
+            if (result.headers?.['set-cookie']) {
+              await persistCookieJar(jar, userId, workspaceId, config.url);
+            }
 
-    // 6. LOG HISTORY (Ad-hoc)
-    const executionLog = await ExecutionLog.create({
-      requestId: null,
-      collectionId: null,
-      workspaceId,
-      environmentId: environmentId || null,
-      method: config.method,
-      url: config.url,
-      status: result.status,
-      statusText: result.statusText,
-      responseHeaders: result.headers,
-      responseBody: result.data,
-      responseSize: result.size,
-      timings: result.timings,
-      executedBy: userId,
-    });
+            // 6. LOG HISTORY (Ad-hoc)
+            const executionLog = await ExecutionLog.create({
+              requestId: null,
+              collectionId: null,
+              workspaceId,
+              environmentId: environmentId || null,
+              method: config.method,
+              url: config.url,
+              status: result.status,
+              statusText: result.statusText,
+              responseHeaders: result.headers,
+              responseBody: result.data,
+              responseSize: result.size,
+              timings: result.timings,
+              executedBy: userId,
+            });
 
             res.status(200).json({
                 ...result,
@@ -229,18 +235,18 @@ export const requestController = {
     /* ===========================
      HISTORY
     ============================ */
-  getRequestHistory: catchAsync(async (req, res) => {
-    const { requestId } = req.params;
-    const { environmentId } = req.body;
+    getRequestHistory: catchAsync(async (req, res) => {
+      const { requestId } = req.params;
+      const { environmentId } = req.body;
 
-    const history = await ExecutionLog.find({
-      requestId,
-      environmentId,
-      executedBy: req.user.id
-    })
-      .sort({ createdAt: -1 })
-      .limit(20);
+      const history = await ExecutionLog.find({
+        requestId,
+        environmentId,
+        executedBy: req.user.id
+      })
+        .sort({ createdAt: -1 })
+        .limit(20);
 
-    res.json(history);
-  }),
+      res.json(history);
+    }),
 };

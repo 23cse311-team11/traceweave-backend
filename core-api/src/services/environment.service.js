@@ -219,7 +219,7 @@ export const environmentService = {
 
         const finalValue = encrypt(value);
 
-        return prisma.environmentVariable.create({
+        const createdVar = await prisma.environmentVariable.create({
             data: {
                 environmentId,
                 key,
@@ -228,6 +228,11 @@ export const environmentService = {
                 createdById: userId,
             },
         });
+
+        return {
+            ...createdVar,
+            value: isSecret ? '********' : value,
+        }
     },
 
     // Get Variables
@@ -304,10 +309,20 @@ export const environmentService = {
             data.value = encrypt(value);
         }
 
-        return prisma.environmentVariable.update({
+        const updatedVar = await prisma.environmentVariable.update({
             where: { id: variableId },
             data,
         });
+
+        // If we just updated the value, use that. If not, we must decrypt the existing DB value.
+        const plainValue = value !== undefined 
+            ? value 
+            : decrypt(updatedVar.value);
+
+        return {
+            ...updatedVar,
+            value: updatedVar.isSecret ? '********' : plainValue
+        };
     },
 
     async deleteVariable(variableId, userId) {
