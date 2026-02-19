@@ -6,31 +6,50 @@ datasource db {
   provider = "postgresql"
 }
 
+///////////////////////////////////////////////////////
+// ENUMS
+///////////////////////////////////////////////////////
+
 enum WorkspaceRole {
   OWNER
   EDITOR
   VIEWER
 }
 
-model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  fullName      String?   @map("full_name")
-  avatarUrl     String?   @map("avatar_url")
-  
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at") 
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
 
-  // Relations
-  identities    Identity[]        // <--- One User, Many Login Methods
-  workspaces    WorkspaceMember[]
-  ownedWorkspaces Workspace[]
-  
+///////////////////////////////////////////////////////
+// USERS & AUTH
+///////////////////////////////////////////////////////
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  fullName         String?   @map("full_name")
+  avatarUrl        String?   @map("avatar_url")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  identities       Identity[]
+  workspaces       WorkspaceMember[]
+  ownedWorkspaces  Workspace[]
+
   createdEnvironments Environment[]
   createdVariables    EnvironmentVariable[]
   accessibleEnvironments UserEnvironment[]
 
+  apiKeysCreated ApiKey[]
+  triggeredExecutions WorkflowExecution[]
+
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -42,8 +61,10 @@ model Identity {
   passwordHash String?  @map("password_hash")
   accessToken  String?  @map("access_token")
   refreshToken String?  @map("refresh_token")
+
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
+
   user         User     @relation(fields: [userId], references: [id])
 
   @@unique([provider, providerId])
@@ -51,24 +72,29 @@ model Identity {
   @@map("identities")
 }
 
+///////////////////////////////////////////////////////
+// WORKSPACES & RBAC
+///////////////////////////////////////////////////////
+
 model Workspace {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  ownerId     String   @map("owner_id")
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  ownerId       String   @map("owner_id")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
 
-  // Relations
-  owner       User     @relation(fields: [ownerId], references: [id])
-  members     WorkspaceMember[]
-  collections Collection[]
-  environments Environment[]
+  owner         User     @relation(fields: [ownerId], references: [id])
+  members       WorkspaceMember[]
+  collections   Collection[]
+  environments  Environment[]
   userEnvironments UserEnvironment[]
-  workflows Workflow[]
+  workflows     Workflow[]
+  apiKeys       ApiKey[]
 
+  @@index([deletedAt])
   @@map("workspaces")
 }
 
@@ -78,6 +104,7 @@ model WorkspaceMember {
   userId      String        @map("user_id")
   role        WorkspaceRole @default(VIEWER)
   joinedAt    DateTime      @default(now()) @map("joined_at")
+
   user        User          @relation(fields: [userId], references: [id])
   workspace   Workspace     @relation(fields: [workspaceId], references: [id])
 
@@ -85,57 +112,74 @@ model WorkspaceMember {
   @@map("workspace_members")
 }
 
+///////////////////////////////////////////////////////
+// COLLECTIONS & REQUESTS
+///////////////////////////////////////////////////////
+
 model Collection {
-  id          String              @id @default(uuid())
-  workspaceId String              @map("workspace_id")
+  id          String       @id @default(uuid())
+  workspaceId String       @map("workspace_id")
   name        String
-  parentId    String?             @map("parent_id")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
-  deletedAt   DateTime?           @map("deleted_at")
-  parent      Collection?         @relation("SubCollections", fields: [parentId], references: [id])
-  children    Collection[]        @relation("SubCollections")
-  workspace   Workspace           @relation(fields: [workspaceId], references: [id])
+  parentId    String?      @map("parent_id")
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  deletedAt   DateTime?    @map("deleted_at")
+
+  parent      Collection?  @relation("SubCollections", fields: [parentId], references: [id])
+  children    Collection[] @relation("SubCollections")
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
   requests    RequestDefinition[]
 
+  @@index([workspaceId])
+  @@index([deletedAt])
   @@map("collections")
 }
 
 model RequestDefinition {
-  id           String     @id @default(uuid())
-  collectionId String     @map("collection_id")
-  name         String
-  method       String
-  url          String
-  headers      Json?
-  body         Json?
-  params       Json?
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-  deletedAt    DateTime?  @map("deleted_at")
-  collection   Collection @relation(fields: [collectionId], references: [id])
-
-  @@map("request_definitions")
-}
-
-// OP-370: Environments & Variables
-model Environment {
   id           String   @id @default(uuid())
-  workspaceId  String   @map("workspace_id")
+  collectionId String   @map("collection_id")
   name         String
-  isPersistent Boolean  @default(false) @map("is_persistent")
-  createdById  String   @map("created_by")
-  
+
+  // NEW
+  protocol     String   @default("http")
+  config       Json?    @default("{}")
+
+  version      Int      @default(1)
+
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
 
-  // Relations
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
-  createdBy    User      @relation(fields: [createdById], references: [id])
-  variables    EnvironmentVariable[]
+  collection   Collection @relation(fields: [collectionId], references: [id])
+  workflowSteps WorkflowStep[]
+
+  @@map("request_definitions")
+}
+
+
+///////////////////////////////////////////////////////
+// ENVIRONMENTS & VARIABLES
+///////////////////////////////////////////////////////
+
+model Environment {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String
+  isPersistent  Boolean  @default(false) @map("is_persistent")
+  createdById   String   @map("created_by")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  createdBy     User      @relation(fields: [createdById], references: [id])
+  variables     EnvironmentVariable[]
   userEnvironments UserEnvironment[]
 
+  @@index([workspaceId])
+  @@index([deletedAt])
   @@map("environments")
 }
 
@@ -145,7 +189,6 @@ model UserEnvironment {
   workspaceId   String      @map("workspace_id")
   environmentId String      @map("environment_id")
 
-  // Relations
   user          User        @relation(fields: [userId], references: [id])
   workspace     Workspace   @relation(fields: [workspaceId], references: [id])
   environment   Environment @relation(fields: [environmentId], references: [id])
@@ -158,7 +201,7 @@ model EnvironmentVariable {
   id            String      @id @default(uuid())
   environmentId String      @map("environment_id")
   key           String
-  value         String      // Encrypted if isSecret
+  value         String
   isSecret      Boolean     @default(false) @map("is_secret")
   createdById   String      @map("created_by")
 
@@ -166,32 +209,91 @@ model EnvironmentVariable {
   updatedAt     DateTime    @updatedAt @map("updated_at")
   deletedAt     DateTime?   @map("deleted_at")
 
-  // Relations
   environment   Environment @relation(fields: [environmentId], references: [id])
   createdBy     User        @relation(fields: [createdById], references: [id])
 
   @@unique([environmentId, key])
+  @@index([deletedAt])
   @@map("environment_variables")
 }
 
+///////////////////////////////////////////////////////
+// WORKFLOWS
+///////////////////////////////////////////////////////
+
 model Workflow {
-  id          String   @id @default(uuid())
-  workspaceId String   @map("workspace_id")
-  name        String
-  description String?
-  
-  // JSON Structure:
-  // [
-  //   { "requestId": "uuid", "name": "Login", "stopOnFailure": true },
-  //   { "requestId": "uuid", "name": "Get Profile" }
-  // ]
-  steps       Json     
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String
+  description   String?
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
 
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  steps         WorkflowStep[]
+  executions    WorkflowExecution[]
 
+  @@index([workspaceId])
+  @@index([deletedAt])
   @@map("workflows")
+}
+
+model WorkflowStep {
+  id            String   @id @default(uuid())
+  workflowId    String   @map("workflow_id")
+  requestId     String   @map("request_id")
+  order         Int
+  stopOnFailure Boolean  @default(true)
+
+  workflow      Workflow @relation(fields: [workflowId], references: [id])
+  request       RequestDefinition @relation(fields: [requestId], references: [id])
+
+  @@unique([workflowId, order])
+  @@index([workflowId])
+  @@map("workflow_steps")
+}
+
+model WorkflowExecution {
+  id            String                   @id @default(uuid())
+  workflowId    String                   @map("workflow_id")
+  triggeredById String?                  @map("triggered_by_id")
+  apiKeyId      String?                  @map("api_key_id")
+
+  status        WorkflowExecutionStatus  @default(PENDING)
+
+  startedAt     DateTime                 @default(now()) @map("started_at")
+  completedAt   DateTime?                @map("completed_at")
+
+  workflow      Workflow                 @relation(fields: [workflowId], references: [id])
+  triggeredBy   User?                    @relation(fields: [triggeredById], references: [id])
+  apiKey        ApiKey?                  @relation(fields: [apiKeyId], references: [id])
+
+  @@index([workflowId])
+  @@index([status])
+  @@map("workflow_executions")
+}
+
+///////////////////////////////////////////////////////
+// API KEYS (CI/CD)
+///////////////////////////////////////////////////////
+
+model ApiKey {
+  id          String        @id @default(uuid())
+  workspaceId String        @map("workspace_id")
+  name        String
+  hashedKey   String        @map("hashed_key")
+  role        WorkspaceRole @default(EDITOR)
+  expiresAt   DateTime?     @map("expires_at")
+  createdById String        @map("created_by")
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  executions  WorkflowExecution[]
+
+  @@index([workspaceId])
+  @@map("api_keys")
 }
