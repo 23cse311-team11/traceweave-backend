@@ -48,8 +48,10 @@ export const wsRunnerService = {
                 });
 
                 ws.on('error', (error) => {
+                    console.error(`[WS Runner Error] Connection ${connectionId}:`, error);
                     sseService.sendEvent(connectionId, 'ws_error', { error: error.message });
-                    // If error happens before 'open', reject the initial promise
+                    
+                    // If it errors BEFORE 'open', we must reject the promise so the controller knows
                     if (!activeSockets.has(connectionId)) {
                         reject(error);
                     }

@@ -10,6 +10,8 @@ const router = express.Router();
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+router.get('/ws/stream', wsController.streamConnection);
+
 router.use(authenticateUser);
 
 // Static / specific routes
@@ -20,7 +22,6 @@ router.delete('/jar/cookies/:cookieId', cookieController.deleteCookie);
 router.delete('/jar/cookies', cookieController.clearCookies);
 
 // WebSocket routes
-router.get('/ws/stream', wsController.streamConnection);
 router.post('/ws/connect', wsController.connectTarget);
 router.post('/ws/send', wsController.sendMessage);
 router.post('/ws/disconnect', wsController.disconnectTarget);
