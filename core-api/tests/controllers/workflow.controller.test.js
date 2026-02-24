@@ -9,14 +9,13 @@ const mockPrisma = {
     findUnique: jest.fn(),
     update: jest.fn(),
   },
+  workflowExecution: {
+    findMany: jest.fn(), // Added this for getWorkflowHistory
+  }
 };
 
 const mockWorkflowRunner = {
   executeWorkflow: jest.fn(),
-};
-
-const mockWorkflowLog = {
-  find: jest.fn(),
 };
 
 jest.unstable_mockModule('../../src/config/prisma.js', () => ({
@@ -27,10 +26,7 @@ jest.unstable_mockModule('../../src/services/workflow-runner.service.js', () => 
   executeWorkflow: mockWorkflowRunner.executeWorkflow,
 }));
 
-jest.unstable_mockModule('../../src/models/workflow-log.model.js', () => ({
-  default: mockWorkflowLog,
-}));
-
+// We can remove the mockWorkflowLog since it's no longer used in the controller
 // Import controller after mocking
 const { workflowController } = await import('../../src/controllers/workflow.controller.js');
 
@@ -53,8 +49,19 @@ describe('Workflow Controller', () => {
 
             await workflowController.createWorkflow(req, res, next);
 
+            // Updated expectation to match the controller's exact Prisma payload
             expect(mockPrisma.workflow.create).toHaveBeenCalledWith({
-                data: req.body
+                data: {
+                    workspaceId: 'ws1',
+                    name: 'WF 1',
+                    description: undefined,
+                    steps: {
+                        create: []
+                    }
+                },
+                include: {
+                    steps: true
+                }
             });
             expect(res.statusCode).toBe(201);
             expect(res._getJSONData()).toEqual(workflow);
@@ -69,8 +76,10 @@ describe('Workflow Controller', () => {
 
             await workflowController.getWorkflows(req, res, next);
 
+            // Added the include clause to the expectation
             expect(mockPrisma.workflow.findMany).toHaveBeenCalledWith({
-                where: { workspaceId: 'ws1', deletedAt: null }
+                where: { workspaceId: 'ws1', deletedAt: null },
+                include: { steps: true }
             });
             expect(res.statusCode).toBe(200);
             expect(res._getJSONData()).toEqual(workflows);
@@ -119,19 +128,21 @@ describe('Workflow Controller', () => {
     describe('getWorkflowHistory', () => {
         test('should return history', async () => {
             req.params = { workflowId: 'wf1' };
-            const logs = [{ id: 'log1' }];
+            const executions = [{ id: 'exec1' }];
             
-            const mockFind = {
-                sort: jest.fn().mockReturnThis(),
-                limit: jest.fn().mockResolvedValue(logs),
-            };
-            mockWorkflowLog.find.mockReturnValue(mockFind);
+            // Replaced Mongo mock with Prisma mock
+            mockPrisma.workflowExecution.findMany.mockResolvedValue(executions);
 
             await workflowController.getWorkflowHistory(req, res, next);
 
-            expect(mockWorkflowLog.find).toHaveBeenCalledWith({ workflowId: 'wf1' });
+            expect(mockPrisma.workflowExecution.findMany).toHaveBeenCalledWith({ 
+                where: { workflowId: 'wf1' },
+                orderBy: { startedAt: 'desc' },
+                take: 20,
+                include: { triggeredBy: true }
+            });
             expect(res.statusCode).toBe(200);
-            expect(res._getJSONData()).toEqual(logs);
+            expect(res._getJSONData()).toEqual(executions);
         });
     });
 });

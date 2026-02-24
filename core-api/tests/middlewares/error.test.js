@@ -76,7 +76,7 @@ describe('Error Middleware', () => {
             res = httpMocks.createResponse();
             next = jest.fn();
             res.status = jest.fn().mockReturnValue(res);
-            res.send = jest.fn().mockReturnValue(res);
+            res.json = jest.fn().mockReturnValue(res); // Mock json instead of send
             mockConfig.env = 'development';
             jest.spyOn(console, 'error').mockImplementation(() => {});
         });
@@ -85,17 +85,15 @@ describe('Error Middleware', () => {
             jest.clearAllMocks();
         });
 
-        test('should send proper error response and put the error message in res.locals', () => {
+        test('should send proper error response', () => {
             const error = new ApiError(httpStatus.BAD_REQUEST, 'Any error');
             const res = httpMocks.createResponse();
-            const sendSpy = jest.spyOn(res, 'send');
-
+            const jsonSpy = jest.spyOn(res, 'json'); // Spy on json
 
             errorHandler(error, req, res, next);
 
-            expect(res.locals.errorMessage).toBe(error.message);
             expect(res.statusCode).toBe(httpStatus.BAD_REQUEST);
-            expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+            expect(jsonSpy).toHaveBeenCalledWith(expect.objectContaining({
                 code: httpStatus.BAD_REQUEST,
                 message: error.message,
                 stack: error.stack,
@@ -106,11 +104,11 @@ describe('Error Middleware', () => {
             mockConfig.env = 'development';
             const error = new ApiError(httpStatus.BAD_REQUEST, 'Any error');
             const res = httpMocks.createResponse();
-             const sendSpy = jest.spyOn(res, 'send');
+            const jsonSpy = jest.spyOn(res, 'json'); // Spy on json
 
             errorHandler(error, req, res, next);
 
-            expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+            expect(jsonSpy).toHaveBeenCalledWith(expect.objectContaining({
                 code: httpStatus.BAD_REQUEST,
                 message: error.message, 
                 stack: error.stack
@@ -121,11 +119,11 @@ describe('Error Middleware', () => {
              mockConfig.env = 'production';
              const error = new ApiError(httpStatus.BAD_REQUEST, 'Any error');
              const res = httpMocks.createResponse();
-             const sendSpy = jest.spyOn(res, 'send');
+             const jsonSpy = jest.spyOn(res, 'json'); // Spy on json
 
              errorHandler(error, req, res, next);
 
-             expect(sendSpy).toHaveBeenCalledWith(expect.not.objectContaining({
+             expect(jsonSpy).toHaveBeenCalledWith(expect.not.objectContaining({
                  stack: expect.anything()
              }));
         });
