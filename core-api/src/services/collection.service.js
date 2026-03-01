@@ -52,18 +52,22 @@ export class CollectionService {
           deletedAt: null,
           parentId: null
         },
+        orderBy: { order: 'asc' },
         include: {
           children: {
             where: { deletedAt: null },
+            orderBy: { order: 'asc' },
             include: {
               children: true,
               requests: {
-                where: { deletedAt: null }
+                where: { deletedAt: null },
+                orderBy: { order: 'asc' },
               }
             }
           },
           requests: {
-            where: { deletedAt: null }
+            where: { deletedAt: null },
+            orderBy: { order: 'asc' }
           }
         }
       });
@@ -91,10 +95,33 @@ export class CollectionService {
       );
     }
 
-    await prisma.collection.update({
-      where: { id: collectionId },
-      data: { deletedAt: new Date() }
-    });
+    const deleteRecursive = async (id) => {
+      // Find children
+      const children = await prisma.collection.findMany({
+        where: { parentId: id, deletedAt: null }
+      });
+
+      // Recurse for each child
+      for (const child of children) {
+        await deleteRecursive(child.id);
+      }
+
+      // Soft delete the current item and its associated requests
+      await prisma.collection.update({
+        where: { id },
+        data: { deletedAt: new Date() }
+      });
+      
+      // Also soft delete requests inside this collection
+      if (prisma.request) {
+        await prisma.request.updateMany({
+          where: { collectionId: id, deletedAt: null },
+          data: { deletedAt: new Date() }
+        });
+      }
+    };
+
+    await deleteRecursive(collectionId);
 
     return {
       success: true,
@@ -104,7 +131,7 @@ export class CollectionService {
 
   }
 
-  static async updateCollection(collectionId, updateBody) {
+  static async updateCollection(collectionId, updateBody, userId) {
     const collection = await prisma.collection.findFirst({
       where: {
         id: collectionId,

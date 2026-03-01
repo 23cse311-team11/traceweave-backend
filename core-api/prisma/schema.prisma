@@ -121,6 +121,7 @@ model Collection {
   workspaceId String       @map("workspace_id")
   name        String
   parentId    String?      @map("parent_id")
+  order       Int          @default(0)
 
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
@@ -140,8 +141,8 @@ model RequestDefinition {
   id           String   @id @default(uuid())
   collectionId String   @map("collection_id")
   name         String
+  order       Int          @default(0)
 
-  // NEW
   protocol     String   @default("http")
   config       Json?    @default("{}")
 

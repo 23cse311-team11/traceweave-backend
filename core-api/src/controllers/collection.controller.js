@@ -8,6 +8,7 @@ const catchAsync = (fn) => (req, res, next) =>
 
 export const createCollection = catchAsync(async (req, res) => {
   const { name, parentId } = req.body;
+  console.log(req.body)
   const { workspaceId } = req.params;
   const userId = req.user.id;
 
