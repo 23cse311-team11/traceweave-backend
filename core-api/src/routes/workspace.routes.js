@@ -11,7 +11,12 @@ import {
   updateMemberRole,
   getWorkspaceHistory,
   getGlobalHistory,
-  getGlobalStats
+  getGlobalStats,
+  createWorkspaceInvite,
+  getPendingInvites,
+  acceptWorkspaceInvite,
+  toggleCommonLink,
+  resetCommonLink
 } from '../controllers/workspace.controller.js';
 
 import {
@@ -33,6 +38,8 @@ router.get('/user/global-history', getGlobalHistory);
 router.get('/user/global-stats', getGlobalStats);
 router.get('/user/global-environments', getGlobalEnvironments);
 
+router.post('/invites/accept', acceptWorkspaceInvite);
+
 router.get('/:workspaceId', requireWorkspaceRole('VIEWER'), getWorkspaceById);
 router.delete('/:workspaceId', requireWorkspaceRole('OWNER'), deleteWorkspace);
 router.patch('/:workspaceId', requireWorkspaceRole('EDITOR'), updateWorkspace);
@@ -42,5 +49,10 @@ router.patch('/:workspaceId/members/:userId', requireWorkspaceRole('OWNER'), upd
 router.get('/:workspaceId/history', requireWorkspaceRole('VIEWER'), getWorkspaceHistory);
 router.post('/:workspaceId/environments', requireWorkspaceRole('EDITOR'), createEnvironment);
 router.get('/:workspaceId/environments', requireWorkspaceRole('VIEWER'), getWorkspaceEnvironments);
+
+router.post('/:workspaceId/invites', requireWorkspaceRole('OWNER'), createWorkspaceInvite);
+router.get('/:workspaceId/invites', requireWorkspaceRole('EDITOR'), getPendingInvites);
+router.patch('/:workspaceId/invites/link/toggle', requireWorkspaceRole('OWNER'), toggleCommonLink);
+router.post('/:workspaceId/invites/link/reset', requireWorkspaceRole('OWNER'), resetCommonLink);
 
 export default router;

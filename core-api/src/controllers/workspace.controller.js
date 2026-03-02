@@ -122,6 +122,67 @@ export const addMemberToWorkspace = async (req, res, next) => {
   }
 };
 
+export const createWorkspaceInvite = async (req, res, next) => {
+  try {
+    const { workspaceId } = req.params;
+    const { email, role } = req.body;
+    const inviterId = req.user.id;
+
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    const invite = await workspaceService.createInvite(workspaceId, inviterId, email, role || 'VIEWER');
+    
+    // Generate the magic link the user will click
+    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/invite/${invite.token}`;
+
+    res.status(201).json({
+      message: 'Invite created successfully',
+      data: { ...invite, inviteLink }
+    });
+  } catch (error) { next(error); }
+};
+
+export const getPendingInvites = async (req, res, next) => {
+  try {
+    const { workspaceId } = req.params;
+    const invites = await workspaceService.getPendingInvites(workspaceId);
+    res.status(200).json({ data: invites });
+  } catch (error) { next(error); }
+};
+
+// Note: This endpoint doesn't need a workspaceId in the URL, just the token
+export const acceptWorkspaceInvite = async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    const userId = req.user.id; // User must be logged in to accept
+
+    if (!token) return res.status(400).json({ message: 'Token is required' });
+
+    const member = await workspaceService.acceptInvite(token, userId);
+    res.status(200).json({ message: 'Welcome to the workspace!', data: member });
+  } catch (error) { next(error); }
+};
+
+export const toggleCommonLink = async (req, res) => {
+  const { workspaceId } = req.params;  
+  const { isActive } = req.body;
+
+  const result = await workspaceService.generateOrToggleCommonLink(
+    workspaceId,
+    isActive
+  );
+
+  res.json(result);
+};
+
+export const resetCommonLink = async (req, res, next) => {
+  try {
+    const { workspaceId } = req.params;
+    const workspace = await workspaceService.resetCommonLink(workspaceId);
+    res.status(200).json({ data: workspace });
+  } catch (error) { next(error); }
+};
+
 export const removeMemberFromWorkspace = async (req, res, next) => {
   try {
     const { workspaceId, userId: memberUserId } = req.params;
@@ -140,7 +201,6 @@ export const removeMemberFromWorkspace = async (req, res, next) => {
     next(error);
   }
 };
-
 
 export const updateMemberRole = async (req, res, next) => {
   try {

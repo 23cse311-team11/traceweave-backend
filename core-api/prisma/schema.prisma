@@ -24,6 +24,13 @@ enum WorkflowExecutionStatus {
   CANCELLED
 }
 
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  REVOKED
+}
+
 ///////////////////////////////////////////////////////
 // USERS & AUTH
 ///////////////////////////////////////////////////////
@@ -41,6 +48,7 @@ model User {
   identities       Identity[]
   workspaces       WorkspaceMember[]
   ownedWorkspaces  Workspace[]
+  sentInvites  WorkspaceInvite[] @relation("UserInvites")
 
   createdEnvironments Environment[]
   createdVariables    EnvironmentVariable[]
@@ -87,6 +95,9 @@ model Workspace {
   deletedAt     DateTime? @map("deleted_at")
 
   owner         User     @relation(fields: [ownerId], references: [id])
+  invites      WorkspaceInvite[]
+  inviteToken        String?  @unique @map("invite_token")
+  isInviteLinkActive Boolean  @default(false) @map("is_invite_link_active")
   members       WorkspaceMember[]
   collections   Collection[]
   environments  Environment[]
@@ -110,6 +121,26 @@ model WorkspaceMember {
 
   @@unique([workspaceId, userId])
   @@map("workspace_members")
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(uuid())
+  workspaceId String        @map("workspace_id")
+  inviterId   String        @map("inviter_id")
+  email       String
+  role        WorkspaceRole @default(VIEWER)
+  token       String        @unique
+  status      InviteStatus  @default(PENDING)
+  
+  expiresAt   DateTime      @map("expires_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter     User          @relation("UserInvites", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  // A user can't have multiple pending invites to the same workspace
+  @@index([workspaceId, email])
+  @@map("workspace_invites")
 }
 
 ///////////////////////////////////////////////////////
