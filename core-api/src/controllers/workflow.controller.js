@@ -1,28 +1,20 @@
 import prisma from '../config/prisma.js';
 import { executeWorkflow } from '../services/workflow-runner.service.js';
 import catchAsync from '../utils/catchAsync.js';
+import { WorkflowEngine } from '../services/workflowEngine.js';
 
 export const workflowController = {
   // Create Workflow
   createWorkflow: catchAsync(async (req, res) => {
-    const { workspaceId, name, steps, description } = req.body; // steps is array of { requestId, order, stopOnFailure }
+    const { workspaceId, name, description, flowData } = req.body;
     
-    // Create workflow with related steps
+    // Create workflow
     const workflow = await prisma.workflow.create({
       data: { 
         workspaceId, 
         name, 
         description,
-        steps: {
-            create: steps.map((step, index) => ({
-                requestId: step.requestId,
-                order: step.order ?? index,
-                stopOnFailure: step.stopOnFailure ?? true
-            }))
-        }
-      },
-      include: {
-          steps: true
+        ...(flowData && { flowData })
       }
     });
     res.status(201).json(workflow);
@@ -32,8 +24,7 @@ export const workflowController = {
   getWorkflows: catchAsync(async (req, res) => {
     const { workspaceId } = req.params;
     const workflows = await prisma.workflow.findMany({
-      where: { workspaceId, deletedAt: null },
-      include: { steps: true }
+      where: { workspaceId, deletedAt: null }
     });
     res.json(workflows);
   }),
@@ -42,8 +33,7 @@ export const workflowController = {
   getWorkflowById: catchAsync(async (req, res) => {
     const { workflowId } = req.params;
     const workflow = await prisma.workflow.findUnique({
-      where: { id: workflowId },
-      include: { steps: { include: { request: true }, orderBy: { order: 'asc' } } }
+      where: { id: workflowId }
     });
     if (!workflow) return res.status(404).json({ error: 'Workflow not found' });
     res.json(workflow);
@@ -52,26 +42,11 @@ export const workflowController = {
   // Update
   updateWorkflow: catchAsync(async (req, res) => {
     const { workflowId } = req.params;
-    const { steps, ...otherData } = req.body;
+    const { ...updateData } = req.body;
     
-    // Build update data
-    const updateData = { ...otherData };
-    
-    if (steps) {
-        updateData.steps = {
-            deleteMany: {}, // Remove existing steps
-            create: steps.map((step, index) => ({
-                requestId: step.requestId,
-                order: step.order ?? index,
-                stopOnFailure: step.stopOnFailure ?? true
-            }))
-        };
-    }
-
     const workflow = await prisma.workflow.update({
       where: { id: workflowId },
-      data: updateData,
-      include: { steps: true }
+      data: updateData
     });
     res.json(workflow);
   }),
@@ -100,5 +75,38 @@ export const workflowController = {
         include: { triggeredBy: true }
     });
     res.json(executions);
+  }),
+
+  // RUN CANVAS WORKFLOW (Interactive from Frontend Builder)
+  runCanvasWorkflow: catchAsync(async (req, res) => {
+    const { workflow, clientId } = req.body; // Expects complete Graph JSON and a clientId for WS
+
+    // Find the specific websocket connection
+    const wss = req.app.get('wss');
+    let clientSocket = null;
+    
+    if (wss && clientId) {
+       for (const client of wss.clients) {
+         if (client.clientId === clientId) {
+           clientSocket = client;
+           break;
+         }
+       }
+    }
+
+    const emitEvent = (eventData) => {
+      if (clientSocket && clientSocket.readyState === 1 /* OPEN */) {
+        clientSocket.send(JSON.stringify(eventData));
+      }
+    };
+
+    const engine = new WorkflowEngine(workflow, {}, emitEvent);
+    
+    // We execute async so we can return immediate response
+    engine.run().catch(err => {
+        emitEvent({ type: 'workflow-error', error: err.message });
+    });
+
+    res.status(202).json({ message: 'Canvas Workflow Execution Started' });
   })
 };

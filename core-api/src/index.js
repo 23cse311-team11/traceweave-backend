@@ -48,6 +48,8 @@ app.use((req, res, next) => {
 app.use(errorConverter); // Convert non-ApiErrors to ApiErrors
 app.use(errorHandler);   // Handle the response
 
+import { WebSocketServer } from 'ws';
+
 // Server Start
 let server;
 
@@ -60,6 +62,18 @@ const startServer = async () => {
     server = app.listen(config.port, () => {
       console.log(`Core API running on port ${config.port} in ${config.env} mode`);
     });
+
+    // Setup WebSockets
+    const wss = new WebSocketServer({ server });
+    app.set('wss', wss);
+
+    wss.on('connection', (ws, req) => {
+      // Expecting ?clientId=xxxx in url
+      const urlParams = new URLSearchParams(req.url.split('?')[1]);
+      ws.clientId = urlParams.get('clientId');
+      console.log('WS Client connected:', ws.clientId);
+    });
+
   } catch (error) {
     console.error('Unable to connect to the database:', error);
     process.exit(1);

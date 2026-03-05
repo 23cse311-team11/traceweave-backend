@@ -184,7 +184,6 @@ model RequestDefinition {
   deletedAt    DateTime? @map("deleted_at")
 
   collection   Collection @relation(fields: [collectionId], references: [id])
-  workflowSteps WorkflowStep[]
 
   @@map("request_definitions")
 }
@@ -259,12 +258,14 @@ model Workflow {
   name          String
   description   String?
 
+  // THE ENGINE: Stores the entire React Flow graph (nodes & edges)
+  flowData      Json     @default("{\"nodes\":[], \"edges\":[]}") @map("flow_data")
+
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
-  steps         WorkflowStep[]
   executions    WorkflowExecution[]
 
   @@index([workspaceId])
@@ -272,20 +273,6 @@ model Workflow {
   @@map("workflows")
 }
 
-model WorkflowStep {
-  id            String   @id @default(uuid())
-  workflowId    String   @map("workflow_id")
-  requestId     String   @map("request_id")
-  order         Int
-  stopOnFailure Boolean  @default(true)
-
-  workflow      Workflow @relation(fields: [workflowId], references: [id])
-  request       RequestDefinition @relation(fields: [requestId], references: [id])
-
-  @@unique([workflowId, order])
-  @@index([workflowId])
-  @@map("workflow_steps")
-}
 
 model WorkflowExecution {
   id            String                   @id @default(uuid())
@@ -294,6 +281,10 @@ model WorkflowExecution {
   apiKeyId      String?                  @map("api_key_id")
 
   status        WorkflowExecutionStatus  @default(PENDING)
+
+  // THE MEMORY: Stores variables, responses, and the step-by-step logs
+  contextData   Json?                    @map("context_data")
+  executionLogs Json?                    @map("execution_logs") 
 
   startedAt     DateTime                 @default(now()) @map("started_at")
   completedAt   DateTime?                @map("completed_at")
