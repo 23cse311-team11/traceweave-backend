@@ -2,6 +2,7 @@ import prisma from '../config/prisma.js';
 import { executeWorkflow } from '../services/workflow-runner.service.js';
 import catchAsync from '../utils/catchAsync.js';
 import { WorkflowEngine } from '../services/workflowEngine.js';
+import ExecutionLog from '../models/execution.model.js';
 
 export const workflowController = {
   // Create Workflow
@@ -79,34 +80,72 @@ export const workflowController = {
 
   // RUN CANVAS WORKFLOW (Interactive from Frontend Builder)
   runCanvasWorkflow: catchAsync(async (req, res) => {
-    const { workflow, clientId } = req.body; // Expects complete Graph JSON and a clientId for WS
+    const { workflow, clientId, environmentValues = {}, workflowId } = req.body;
 
-    // Find the specific websocket connection
     const wss = req.app.get('wss');
     let clientSocket = null;
-    
     if (wss && clientId) {
-       for (const client of wss.clients) {
-         if (client.clientId === clientId) {
-           clientSocket = client;
-           break;
-         }
-       }
+        for (const client of wss.clients) {
+            if (client.clientId === clientId) {
+                clientSocket = client;
+                break;
+            }
+        }
+    }
+
+    // 1. Create a PENDING execution record immediately
+    let execution = null;
+    if (workflowId) {
+        execution = await prisma.workflowExecution.create({
+            data: {
+                workflowId,
+                triggeredById: req.user?.id || null, // req.user may be null (no auth on this route)
+                status: 'RUNNING',
+                startedAt: new Date(),
+            }
+        });
     }
 
     const emitEvent = (eventData) => {
-      if (clientSocket && clientSocket.readyState === 1 /* OPEN */) {
-        clientSocket.send(JSON.stringify(eventData));
-      }
+        if (clientSocket && clientSocket.readyState === 1) {
+            clientSocket.send(JSON.stringify(eventData));
+        }
     };
 
-    const engine = new WorkflowEngine(workflow, {}, emitEvent);
-    
-    // We execute async so we can return immediate response
-    engine.run().catch(err => {
-        emitEvent({ type: 'workflow-error', error: err.message });
-    });
+    const engine = new WorkflowEngine(workflow, { variables: environmentValues }, emitEvent);
 
-    res.status(202).json({ message: 'Canvas Workflow Execution Started' });
-  })
+    // 2. Run async, then update DB when done
+    engine.run()
+        .then(async (finalContext) => {
+            if (execution) {
+                await prisma.workflowExecution.update({
+                    where: { id: execution.id },
+                    data: {
+                        status: 'SUCCESS',
+                        completedAt: new Date(),
+                        contextData: {
+                            variables: finalContext.variables,
+                            responses: finalContext.responses,
+                        },
+                        executionLogs: finalContext.logs,
+                    }
+                });
+            }
+        })
+        .catch(async (err) => {
+            emitEvent({ type: 'workflow-error', error: err.message });
+            if (execution) {
+                await prisma.workflowExecution.update({
+                    where: { id: execution.id },
+                    data: {
+                        status: 'FAILED',
+                        completedAt: new Date(),
+                        executionLogs: [err.message],
+                    }
+                });
+            }
+        });
+
+    res.status(202).json({ message: 'Canvas Workflow Execution Started', executionId: execution?.id || null });
+})
 };

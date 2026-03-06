@@ -119,7 +119,10 @@ export const requestController = {
 
         const executionLog = await ExecutionLog.create({
           requestId: requestDef.id, collectionId: requestDef.collectionId, workspaceId,
+          protocol: requestDef.protocol,
           environmentId: environmentId || null, method: config.method, url: config.url,
+          requestBody: requestDef.config?.body || null, // We save the original request body from DB for reference, not the overridden one from the client
+          requestHeaders: config.headers || null,
           status: result.status, statusText: result.statusText, responseHeaders: result.headers,
           responseBody: result.data, responseSize: result.size, timings: result.timings, executedBy: userId,
         });
@@ -195,8 +198,10 @@ export const requestController = {
 
       const executionLog = await ExecutionLog.create({
         requestId: null, collectionId: null, workspaceId,
+        protocol,
         environmentId: environmentId || null, method: execConfig.method, url: execConfig.url,
         status: result.status, statusText: result.statusText, responseHeaders: result.headers,
+        requestBody: execConfig.body || null, requestHeaders: execConfig.headers || null,
         responseBody: result.data, responseSize: result.size, timings: result.timings, executedBy: userId,
       });
 
