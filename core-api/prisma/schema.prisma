@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+///////////////////////////////////////////////////////
+// ENUMS
+///////////////////////////////////////////////////////
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  REVOKED
+}
+
+///////////////////////////////////////////////////////
+// USERS & AUTH
+///////////////////////////////////////////////////////
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  fullName         String?   @map("full_name")
+  avatarUrl        String?   @map("avatar_url")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  identities       Identity[]
+  workspaces       WorkspaceMember[]
+  ownedWorkspaces  Workspace[]
+  sentInvites  WorkspaceInvite[] @relation("UserInvites")
+
+  createdEnvironments Environment[]
+  createdVariables    EnvironmentVariable[]
+  accessibleEnvironments UserEnvironment[]
+
+  apiKeysCreated ApiKey[]
+  triggeredExecutions WorkflowExecution[]
+
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Identity {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  provider     String
+  providerId   String?  @map("provider_id")
+  passwordHash String?  @map("password_hash")
+  accessToken  String?  @map("access_token")
+  refreshToken String?  @map("refresh_token")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerId])
+  @@unique([userId, provider])
+  @@map("identities")
+}
+
+///////////////////////////////////////////////////////
+// WORKSPACES & RBAC
+///////////////////////////////////////////////////////
+
+model Workspace {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  ownerId       String   @map("owner_id")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  owner         User     @relation(fields: [ownerId], references: [id])
+  invites      WorkspaceInvite[]
+  inviteToken        String?  @unique @map("invite_token")
+  isInviteLinkActive Boolean  @default(false) @map("is_invite_link_active")
+  members       WorkspaceMember[]
+  collections   Collection[]
+  environments  Environment[]
+  userEnvironments UserEnvironment[]
+  workflows     Workflow[]
+  apiKeys       ApiKey[]
+
+  @@index([deletedAt])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  workspaceId String        @map("workspace_id")
+  userId      String        @map("user_id")
+  role        WorkspaceRole @default(VIEWER)
+  joinedAt    DateTime      @default(now()) @map("joined_at")
+
+  user        User          @relation(fields: [userId], references: [id])
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(uuid())
+  workspaceId String        @map("workspace_id")
+  inviterId   String        @map("inviter_id")
+  email       String
+  role        WorkspaceRole @default(VIEWER)
+  token       String        @unique
+  status      InviteStatus  @default(PENDING)
+  
+  expiresAt   DateTime      @map("expires_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter     User          @relation("UserInvites", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  // A user can't have multiple pending invites to the same workspace
+  @@index([workspaceId, email])
+  @@map("workspace_invites")
+}
+
+///////////////////////////////////////////////////////
+// COLLECTIONS & REQUESTS
+///////////////////////////////////////////////////////
+
+model Collection {
+  id          String       @id @default(uuid())
+  workspaceId String       @map("workspace_id")
+  name        String
+  parentId    String?      @map("parent_id")
+  order       Int          @default(0)
+
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  deletedAt   DateTime?    @map("deleted_at")
+
+  parent      Collection?  @relation("SubCollections", fields: [parentId], references: [id])
+  children    Collection[] @relation("SubCollections")
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  requests    RequestDefinition[]
+
+  @@index([workspaceId])
+  @@index([deletedAt])
+  @@map("collections")
+}
+
+model RequestDefinition {
+  id           String   @id @default(uuid())
+  collectionId String   @map("collection_id")
+  name         String
+  order       Int          @default(0)
+
+  protocol     String   @default("http")
+  config       Json?    @default("{}")
+
+  version      Int      @default(1)
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  collection   Collection @relation(fields: [collectionId], references: [id])
+  workflowSteps WorkflowStep[]
+
+  @@map("request_definitions")
+}
+
+
+///////////////////////////////////////////////////////
+// ENVIRONMENTS & VARIABLES
+///////////////////////////////////////////////////////
+
+model Environment {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String
+  isPersistent  Boolean  @default(false) @map("is_persistent")
+  createdById   String   @map("created_by")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  createdBy     User      @relation(fields: [createdById], references: [id])
+  variables     EnvironmentVariable[]
+  userEnvironments UserEnvironment[]
+
+  @@index([workspaceId])
+  @@index([deletedAt])
+  @@map("environments")
+}
+
+model UserEnvironment {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  workspaceId   String      @map("workspace_id")
+  environmentId String      @map("environment_id")
+
+  user          User        @relation(fields: [userId], references: [id])
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id])
+  environment   Environment @relation(fields: [environmentId], references: [id])
+
+  @@unique([userId, environmentId])
+  @@map("user_environments")
+}
+
+model EnvironmentVariable {
+  id            String      @id @default(uuid())
+  environmentId String      @map("environment_id")
+  key           String
+  value         String
+  isSecret      Boolean     @default(false) @map("is_secret")
+  createdById   String      @map("created_by")
+
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  deletedAt     DateTime?   @map("deleted_at")
+
+  environment   Environment @relation(fields: [environmentId], references: [id])
+  createdBy     User        @relation(fields: [createdById], references: [id])
+
+  @@unique([environmentId, key])
+  @@index([deletedAt])
+  @@map("environment_variables")
+}
+
+///////////////////////////////////////////////////////
+// WORKFLOWS
+///////////////////////////////////////////////////////
+
+model Workflow {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String
+  description   String?
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  steps         WorkflowStep[]
+  executions    WorkflowExecution[]
+
+  @@index([workspaceId])
+  @@index([deletedAt])
+  @@map("workflows")
+}
+
+model WorkflowStep {
+  id            String   @id @default(uuid())
+  workflowId    String   @map("workflow_id")
+  requestId     String   @map("request_id")
+  order         Int
+  stopOnFailure Boolean  @default(true)
+
+  workflow      Workflow @relation(fields: [workflowId], references: [id])
+  request       RequestDefinition @relation(fields: [requestId], references: [id])
+
+  @@unique([workflowId, order])
+  @@index([workflowId])
+  @@map("workflow_steps")
+}
+
+model WorkflowExecution {
+  id            String                   @id @default(uuid())
+  workflowId    String                   @map("workflow_id")
+  triggeredById String?                  @map("triggered_by_id")
+  apiKeyId      String?                  @map("api_key_id")
+
+  status        WorkflowExecutionStatus  @default(PENDING)
+
+  startedAt     DateTime                 @default(now()) @map("started_at")
+  completedAt   DateTime?                @map("completed_at")
+
+  workflow      Workflow                 @relation(fields: [workflowId], references: [id])
+  triggeredBy   User?                    @relation(fields: [triggeredById], references: [id])
+  apiKey        ApiKey?                  @relation(fields: [apiKeyId], references: [id])
+
+  @@index([workflowId])
+  @@index([status])
+  @@map("workflow_executions")
+}
+
+///////////////////////////////////////////////////////
+// API KEYS (CI/CD)
+///////////////////////////////////////////////////////
+
+model ApiKey {
+  id          String        @id @default(uuid())
+  workspaceId String        @map("workspace_id")
+  name        String
+  hashedKey   String        @map("hashed_key")
+  role        WorkspaceRole @default(EDITOR)
+  expiresAt   DateTime?     @map("expires_at")
+  createdById String        @map("created_by")
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  executions  WorkflowExecution[]
+
+  @@index([workspaceId])
+  @@map("api_keys")
+}
