@@ -74,11 +74,23 @@ export const requestController = {
         const dbConfig = requestDef.config || {};
         let overrideConfig = overrides.config || {};
 
+        // Convert DB arrays to objects so they merge gracefully with the overridden config objects
+        const formatDbList = (list) => {
+            if (!Array.isArray(list)) return list || {};
+            return list.reduce((acc, item) => {
+                if (item.key && item.active !== false) acc[item.key] = item.value;
+                return acc;
+            }, {});
+        };
+
+        const safeDbHeaders = formatDbList(dbConfig.headers);
+        const safeDbParams = formatDbList(dbConfig.params);
+
         let config = {
           method: overrideConfig.method ?? dbConfig.method ?? 'GET',
           url: overrideConfig.url ?? dbConfig.url ?? '',
-          headers: { ...(dbConfig.headers || {}), ...(overrideConfig.headers || {}) },
-          params: { ...(dbConfig.params || {}), ...(overrideConfig.params || {}) },
+          headers: { ...safeDbHeaders, ...(overrideConfig.headers || {}) },
+          params: { ...safeDbParams, ...(overrideConfig.params || {}) },
           body: overrideConfig.body ?? dbConfig.body,
         };
 
