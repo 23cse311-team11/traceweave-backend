@@ -25,7 +25,14 @@ export const workflowController = {
   getWorkflows: catchAsync(async (req, res) => {
     const { workspaceId } = req.params;
     const workflows = await prisma.workflow.findMany({
-      where: { workspaceId, deletedAt: null }
+      where: { workspaceId, deletedAt: null },
+      include: {
+        // Fetch only the single most recent execution
+        executions: {
+          orderBy: { startedAt: 'desc' },
+          take: 1,
+        }
+      }
     });
     res.json(workflows);
   }),

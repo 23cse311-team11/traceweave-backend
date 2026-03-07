@@ -258,6 +258,8 @@ model Workflow {
   name          String
   description   String?
 
+  pinned        Boolean  @default(false)
+
   // THE ENGINE: Stores the entire React Flow graph (nodes & edges)
   flowData      Json     @default("{\"nodes\":[], \"edges\":[]}") @map("flow_data")
 
