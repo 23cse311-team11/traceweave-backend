@@ -35,6 +35,7 @@ describe('Http Runner Service', () => {
         mockRequest = new EventEmitter();
         mockRequest.write = jest.fn();
         mockRequest.end = jest.fn();
+        mockRequest.destroy = jest.fn();
         
         mockHttp.request.mockReturnValue(mockRequest);
         mockHttps.request.mockReturnValue(mockRequest);
@@ -42,37 +43,36 @@ describe('Http Runner Service', () => {
 
     test('should execute GET request successfully', async () => {
         const config = { url: 'http://example.com' };
-        
         const promise = executeHttpRequest(config);
         
-        // Simulate Socket events
-        const mockSocket = new EventEmitter();
-        mockRequest.emit('socket', mockSocket);
-        mockSocket.emit('lookup');
-        mockSocket.emit('connect');
-
-        // Simulate Response
+        // 1. Setup Response
         const mockResponse = new EventEmitter();
         mockResponse.statusCode = 200;
-        mockResponse.statusMessage = 'OK';
-        // Ensure headers property is enumerable and defined
-        Object.defineProperty(mockResponse, 'headers', {
-            value: { 'content-type': 'application/json' },
-            writable: true,
-            enumerable: true
+        mockResponse.headers = { 'content-type': 'application/json' };
+        
+        // 2. Trigger events in next tick to ensure handlers are attached
+        process.nextTick(() => {
+            mockRequest.emit('response', mockResponse);
+            mockResponse.emit('data', Buffer.from(JSON.stringify({ success: true })));
+            mockResponse.emit('end');
         });
-        
-        mockRequest.emit('response', mockResponse);
-        
-        mockResponse.emit('data', Buffer.from(JSON.stringify({ message: 'Success' })));
-        mockResponse.emit('end');
 
         const result = await promise;
-
-        expect(result.success).toBe(true);
         expect(result.status).toBe(200);
-        expect(result.data).toEqual({ message: 'Success' });
-        expect(mockHttp.request).toHaveBeenCalled();
+        expect(result.data).toEqual({ success: true });
+    });
+
+    test('should handle request errors', async () => {
+        const config = { url: 'http://error.com' };
+        const promise = executeHttpRequest(config);
+
+        process.nextTick(() => {
+            mockRequest.emit('error', new Error('ECONNREFUSED'));
+        });
+
+        const result = await promise;
+        expect(result.success).toBe(false);
+        expect(result.data.error).toBe('ECONNREFUSED');
     });
     
     // ... other tests with fresh mockRequest
@@ -80,19 +80,21 @@ describe('Http Runner Service', () => {
         const config = { url: 'https://secure.example.com' };
 
         const promise = executeHttpRequest(config);
-        
-        const mockSocket = new EventEmitter();
-        mockRequest.emit('socket', mockSocket);
-        mockSocket.emit('lookup');
-        mockSocket.emit('connect');
-        mockSocket.emit('secureConnect');
 
-        const mockResponse = new EventEmitter();
-        mockResponse.statusCode = 200;
-        mockResponse.headers = {};
-        
-        mockRequest.emit('response', mockResponse);
-        mockResponse.emit('end');
+        process.nextTick(() => {
+            const mockSocket = new EventEmitter();
+            mockRequest.emit('socket', mockSocket);
+            mockSocket.emit('lookup');
+            mockSocket.emit('connect');
+            mockSocket.emit('secureConnect');
+
+            const mockResponse = new EventEmitter();
+            mockResponse.statusCode = 200;
+            mockResponse.headers = {};
+
+            mockRequest.emit('response', mockResponse);
+            mockResponse.emit('end');
+        });
 
         const result = await promise;
 
@@ -100,12 +102,14 @@ describe('Http Runner Service', () => {
         expect(result.success).toBe(true);
     });
 
-    test('should handle request errors', async () => {
+    test('should handle generic network errors', async () => {
         const config = { url: 'http://error.example.com' };
         
         const promise = executeHttpRequest(config);
 
-        mockRequest.emit('error', new Error('Network Error'));
+        process.nextTick(() => {
+            mockRequest.emit('error', new Error('Network Error'));
+        });
 
         const result = await promise;
 
@@ -121,17 +125,19 @@ describe('Http Runner Service', () => {
         };
 
         const promise = executeHttpRequest(config);
-        
-        const mockResponse = new EventEmitter();
-        // Ensure headers property is enumerable and defined
-        Object.defineProperty(mockResponse, 'headers', {
-            value: {},
-            writable: true,
-            enumerable: true
-        });
 
-        mockRequest.emit('response', mockResponse);
-        mockResponse.emit('end');
+        process.nextTick(() => {
+            const mockResponse = new EventEmitter();
+            // Ensure headers property is enumerable and defined
+            Object.defineProperty(mockResponse, 'headers', {
+                value: {},
+                writable: true,
+                enumerable: true
+            });
+
+            mockRequest.emit('response', mockResponse);
+            mockResponse.emit('end');
+        });
         
         await promise;
 

@@ -28,6 +28,7 @@
     "http": "^0.0.1-security",
     "http-status": "^2.1.0",
     "https": "^1.0.0",
+    "jexl": "^2.3.0",
     "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.3",
     "moment": "^2.30.1",

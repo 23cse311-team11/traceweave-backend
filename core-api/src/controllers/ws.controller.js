@@ -69,7 +69,9 @@ export const wsController = {
         }
 
         // 4. Fire Connection
-        await wsRunnerService.connect(connectionId, configObj.url, configObj.headers);
+        await wsRunnerService.connect(connectionId, configObj.url, configObj.headers, {
+            userId, workspaceId, environmentId
+        });
         
         res.status(200).json({ success: true, message: "Connecting..." });
     }),
