@@ -373,3 +373,33 @@ export const getGlobalStats = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 };
+
+export const duplicateWorkspace = async (req, res, next) => {
+  try {
+    const { workspaceId } = req.params;
+    const userId = req.user.id;
+
+    const newWorkspace = await workspaceService.duplicateWorkspace(workspaceId, userId);
+
+    res.status(201).json({
+      message: 'Workspace duplicated successfully',
+      data: newWorkspace,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const toggleFavorite = async (req, res, next) => {
+  try {
+    const { workspaceId } = req.params;
+    const { isFavorite } = req.body;
+    const userId = req.user.id;
+
+    await workspaceService.updateFavoriteStatus(workspaceId, userId, isFavorite);
+
+    res.status(200).json({ message: 'Favorite status updated' });
+  } catch (error) {
+    next(error);
+  }
+};

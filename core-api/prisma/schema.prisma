@@ -116,6 +116,8 @@ model WorkspaceMember {
   role        WorkspaceRole @default(VIEWER)
   joinedAt    DateTime      @default(now()) @map("joined_at")
 
+  isFavorite  Boolean       @default(false) @map("is_favorite")
+
   user        User          @relation(fields: [userId], references: [id])
   workspace   Workspace     @relation(fields: [workspaceId], references: [id])
 
