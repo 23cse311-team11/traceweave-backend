@@ -35,9 +35,9 @@ const mockPrisma = {
 const mockExecutionLog = { create: jest.fn() };
 const mockExecuteHttpRequest = jest.fn();
 
-// jest.unstable_mockModule('../../src/config/prisma.js', () => ({ default: mockPrisma }));
-// jest.unstable_mockModule('../../src/config/mongo.js', () => ({ default: jest.fn().mockResolvedValue(true) }));
-// jest.unstable_mockModule('../../src/models/execution.model.js', () => ({ default: mockExecutionLog }));
+jest.unstable_mockModule('../../src/config/prisma.js', () => ({ default: mockPrisma }));
+jest.unstable_mockModule('../../src/config/mongo.js', () => ({ default: jest.fn().mockResolvedValue(true) }));
+jest.unstable_mockModule('../../src/models/execution.model.js', () => ({ default: mockExecutionLog }));
 jest.unstable_mockModule('../../src/models/workflow-log.model.js', () => ({ default: { create: jest.fn() } }));
 // CookieJarModel is used inside executeAdHocRequest via cookie.service.js
 jest.unstable_mockModule('../../src/models/cookie-jar.model.js', () => ({

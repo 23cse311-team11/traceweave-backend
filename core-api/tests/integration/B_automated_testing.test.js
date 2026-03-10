@@ -33,7 +33,7 @@ const mockHttpRunner = { executeHttpRequest: jest.fn() };
 
 // jest.unstable_mockModule('../../src/config/prisma.js', () => ({ default: mockPrisma }));
 // jest.unstable_mockModule('../../src/config/mongo.js', () => ({ default: jest.fn().mockResolvedValue(true) }));
-// jest.unstable_mockModule('../../src/models/execution.model.js', () => ({ default: mockExecutionLog }));
+jest.unstable_mockModule('../../src/models/execution.model.js', () => ({ default: mockExecutionLog }));
 jest.unstable_mockModule('../../src/models/workflow-log.model.js', () => ({ default: { create: jest.fn() } }));
 jest.unstable_mockModule('../../src/services/http-runner.service.js', () => mockHttpRunner);
 jest.unstable_mockModule('nodemailer', () => ({
