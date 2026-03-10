@@ -1,7 +1,7 @@
 import express from 'express';
 import validate from '../middlewares/validate.js';
 import authValidation from '../validations/auth.validation.js';
-import { register, login, getMe } from '../controllers/auth.controller.js';
+import { register, login, getMe, updateProfile } from '../controllers/auth.controller.js';
 import authMiddleware from '../middlewares/auth.middleware.js';
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
@@ -53,6 +53,7 @@ router.get(
 );
 
 router.get('/me', authMiddleware, getMe);
+router.put('/profile', authMiddleware, updateProfile);
 router.post('/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ message: 'Logged out' });

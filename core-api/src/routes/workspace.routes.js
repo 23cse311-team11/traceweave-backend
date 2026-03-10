@@ -16,7 +16,9 @@ import {
   getPendingInvites,
   acceptWorkspaceInvite,
   toggleCommonLink,
-  resetCommonLink
+  resetCommonLink,
+  duplicateWorkspace,
+  toggleFavorite
 } from '../controllers/workspace.controller.js';
 
 import {
@@ -43,6 +45,8 @@ router.post('/invites/accept', acceptWorkspaceInvite);
 router.get('/:workspaceId', requireWorkspaceRole('VIEWER'), getWorkspaceById);
 router.delete('/:workspaceId', requireWorkspaceRole('OWNER'), deleteWorkspace);
 router.patch('/:workspaceId', requireWorkspaceRole('EDITOR'), updateWorkspace);
+router.patch('/:workspaceId/favorite', requireWorkspaceRole('VIEWER'), toggleFavorite);
+router.post('/:workspaceId/duplicate', requireWorkspaceRole('VIEWER'), duplicateWorkspace);
 router.post('/:workspaceId/members', requireWorkspaceRole('OWNER'), addMemberToWorkspace);
 router.delete('/:workspaceId/members/:userId', requireWorkspaceRole('OWNER'), removeMemberFromWorkspace);
 router.patch('/:workspaceId/members/:userId', requireWorkspaceRole('OWNER'), updateMemberRole);

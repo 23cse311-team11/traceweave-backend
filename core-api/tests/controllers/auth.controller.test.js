@@ -8,6 +8,7 @@ const mockAuthService = {
   createUser: jest.fn(),
   loginUserWithEmailAndPassword: jest.fn(),
   getUserById: jest.fn(),
+  updateUser: jest.fn(),
 };
 
 const mockTokenService = {
@@ -30,7 +31,7 @@ jest.unstable_mockModule('../../src/services/cookie.service.js', () => mockCooki
 jest.unstable_mockModule('../../src/config/config.js', () => ({ default: mockConfig }));
 
 // Import controller
-const { register, login, getMe, logout } = await import(
+const { register, login, getMe, updateProfile, logout } = await import(
   '../../src/controllers/auth.controller.js'
 );
 
@@ -180,6 +181,30 @@ describe('Auth Controller', () => {
       expect(res.json).toHaveBeenCalledWith({
         message: 'User not found',
         isAuthenticated: false,
+      });
+    });
+  });
+
+  // --------------------
+  // LOGOUT
+  // --------------------
+  describe('updateProfile', () => {
+    test('should update user profile and return user', async () => {
+      req.user = { id: 'user1' };
+      req.body = { fullName: 'New Name', avatarUrl: 'http://new.jpg' };
+      const updatedUser = { id: 'user1', fullName: 'New Name', avatarUrl: 'http://new.jpg' };
+
+      mockAuthService.updateUser.mockResolvedValue(updatedUser);
+
+      await updateProfile(req, res, next);
+
+      expect(mockAuthService.updateUser).toHaveBeenCalledWith('user1', {
+        fullName: 'New Name',
+        avatarUrl: 'http://new.jpg'
+      });
+      expect(res.json).toHaveBeenCalledWith({
+        isAuthenticated: true,
+        user: updatedUser,
       });
     });
   });

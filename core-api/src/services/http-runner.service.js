@@ -193,8 +193,19 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
         try {
            const cookieString = await cookieJar.getCookieString(url);
            if (cookieString) {
-              const existingCookie = safeHeaders['Cookie'] || safeHeaders['cookie'];
-              safeHeaders['Cookie'] = existingCookie ? `${existingCookie}; ${cookieString}` : cookieString;
+              let existingCookie = '';
+              
+              // FIND AND REMOVE OLD CASING TO PREVENT NODE.JS DUPLICATION
+              const cookieKey = Object.keys(safeHeaders).find(k => k.toLowerCase() === 'cookie');
+              if (cookieKey) {
+                  existingCookie = safeHeaders[cookieKey];
+                  delete safeHeaders[cookieKey]; 
+              }
+              
+              // In HTTP, the last matching cookie key-value pair usually takes precedence.
+              // Therefore, we append existingCookie (the user's manually defined request cookies)
+              // AFTER cookieString (the Jar cookies) so they have higher priority.
+              safeHeaders['Cookie'] = existingCookie ? `${cookieString}; ${existingCookie}` : cookieString;
            }
         } catch (e) { console.warn("Cookie injection failed", e); }
       }

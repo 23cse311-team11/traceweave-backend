@@ -53,12 +53,10 @@ export const workspaceService = {
   },
 
   async getUserWorkspaces(userId) {
-    return prisma.workspace.findMany({
+    const workspaces = await prisma.workspace.findMany({
       where: {
         deletedAt: null,
-        members: {
-          some: { userId },
-        },
+        members: { some: { userId } },
       },
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -66,24 +64,13 @@ export const workspaceService = {
         name: true,
         description: true,
         ownerId: true,
-        inviteToken: true,
-        isInviteLinkActive: true,
         createdAt: true,
         updatedAt: true,
-
+        // We include the membership record for THIS specific user to get the flag
         members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                fullName: true,
-                avatarUrl: true,
-              },
-            },
-          },
+          where: { userId },
+          select: { isFavorite: true, role: true, joinedAt: true, user: true }
         },
-
         _count: {
           select: {
             collections: { where: { deletedAt: null } },
@@ -91,6 +78,25 @@ export const workspaceService = {
           }
         }
       },
+    });
+
+    // Flatten the response so isFavorite is easier to access on the frontend
+    return workspaces.map(ws => ({
+      ...ws,
+      isFavorite: ws.members[0]?.isFavorite || false,
+      myRole: ws.members[0]?.role || 'VIEWER'
+    }));
+  },
+
+  async updateFavoriteStatus(workspaceId, userId, isFavorite) {
+    return prisma.workspaceMember.update({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId,
+        },
+      },
+      data: { isFavorite },
     });
   },
 
@@ -441,4 +447,105 @@ export const workspaceService = {
       },
     });
   },
+
+  async duplicateWorkspace(sourceWorkspaceId, userId) {
+    return await prisma.$transaction(async (tx) => {
+      // 1. Fetch source workspace with root-level assets
+      const source = await tx.workspace.findUnique({
+        where: { id: sourceWorkspaceId, deletedAt: null },
+        include: {
+          environments: { 
+            where: { deletedAt: null },
+            include: { variables: { where: { deletedAt: null } } } 
+          },
+          workflows: { where: { deletedAt: null } },
+        }
+      });
+
+      if (!source) throw new ApiError(httpStatus.NOT_FOUND, 'Source workspace not found');
+
+      // 2. Create New Independent Workspace
+      const newWorkspace = await tx.workspace.create({
+        data: {
+          name: `${source.name} (Copy)`,
+          description: source.description,
+          ownerId: userId,
+          members: {
+            create: { userId: userId, role: 'OWNER' } // Only the duplicator is added
+          }
+        }
+      });
+
+      // 3. Clone Environments (Independent Records)
+      for (const env of source.environments) {
+        await tx.environment.create({
+          data: {
+            name: env.name,
+            isPersistent: env.isPersistent,
+            workspaceId: newWorkspace.id,
+            createdById: userId,
+            variables: {
+              create: env.variables.map(v => ({
+                key: v.key,
+                value: v.value,
+                isSecret: v.isSecret,
+                createdById: userId
+              }))
+            }
+          }
+        });
+      }
+
+      // 4. Clone Workflows (Independent Records)
+      for (const wf of source.workflows) {
+        await tx.workflow.create({
+          data: {
+            name: wf.name,
+            description: wf.description,
+            flowData: wf.flowData, // Deep copy of the JSON blob
+            workspaceId: newWorkspace.id
+          }
+        });
+      }
+
+      // 5. Recursive Helper for Deep Collection Cloning
+      const deepCloneCollections = async (oldParentId, newParentId = null) => {
+        // Find all collections at this specific level
+        const collections = await tx.collection.findMany({
+          where: { parentId: oldParentId, workspaceId: sourceWorkspaceId, deletedAt: null },
+          include: { requests: { where: { deletedAt: null } } }
+        });
+
+        for (const col of collections) {
+          // Create new collection in the new workspace
+          const createdCol = await tx.collection.create({
+            data: {
+              name: col.name,
+              workspaceId: newWorkspace.id,
+              parentId: newParentId,
+              order: col.order,
+              requests: {
+                create: col.requests.map(req => ({
+                  name: req.name,
+                  protocol: req.protocol,
+                  config: req.config,
+                  order: req.order
+                }))
+              }
+            }
+          });
+
+          // Recursively clone children of THIS collection
+          await deepCloneCollections(col.id, createdCol.id);
+        }
+      };
+
+      // Start recursion from the root (parentId: null)
+      await deepCloneCollections(null);
+
+      return newWorkspace;
+    }, {
+      timeout: 15000 // Increase timeout for large workspaces
+    });
+  }
 };
