@@ -50,6 +50,9 @@ model User {
   ownedWorkspaces  Workspace[]
   sentInvites  WorkspaceInvite[] @relation("UserInvites")
 
+  receivedNotifications  Notification[] @relation("ReceivedNotifications")
+  triggeredNotifications Notification[] @relation("TriggeredNotifications")
+
   createdEnvironments Environment[]
   createdVariables    EnvironmentVariable[]
   accessibleEnvironments UserEnvironment[]
@@ -78,6 +81,49 @@ model Identity {
   @@unique([provider, providerId])
   @@unique([userId, provider])
   @@map("identities")
+}
+
+///////////////////////////////////////////////////////
+// NOTIFICATIONS
+///////////////////////////////////////////////////////
+
+enum NotificationType {
+  WORKSPACE_INVITE
+  MEMBER_JOINED
+  ROLE_UPDATED
+  WORKFLOW_SUCCESS
+  WORKFLOW_FAILED
+  SYSTEM_ALERT
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")      // The recipient
+  actorId     String?          @map("actor_id")     // Who caused it? (Null if system-generated)
+  
+  type        NotificationType
+  title       String
+  message     String
+  
+  isRead      Boolean          @default(false) @map("is_read")
+  
+  // --- The Interactive Payload ---
+  // Store dynamic variables here to build routes on the frontend
+  // Example: { "workspaceId": "...", "workflowId": "...", "executionId": "..." }
+  metadata    Json?            
+  
+  // Optional explicit URL if you want the backend to dictate the exact route
+  actionUrl   String?          @map("action_url")   
+
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  user        User             @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor       User?            @relation("TriggeredNotifications", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
 }
 
 ///////////////////////////////////////////////////////
