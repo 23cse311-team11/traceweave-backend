@@ -4,17 +4,17 @@ import httpStatus from 'http-status';
 
 // Mocks
 const mockConfig = {
-  env: 'development',
+    env: 'development',
 };
 
 jest.unstable_mockModule('../../src/config/config.js', () => ({
-  default: mockConfig,
+    default: mockConfig,
 }));
 
 // Mock Prisma
 const mockPrisma = {
     Prisma: {
-        PrismaClientKnownRequestError: class PrismaClientKnownRequestError extends Error {}
+        PrismaClientKnownRequestError: class PrismaClientKnownRequestError extends Error { }
     }
 };
 
@@ -43,9 +43,9 @@ describe('Error Middleware', () => {
         test('should convert an Error to ApiError', () => {
             const error = new Error('Any error');
             error.statusCode = httpStatus.BAD_REQUEST;
-            
+
             errorConverter(error, req, res, next);
-            
+
             expect(next).toHaveBeenCalledWith(expect.any(ApiError));
             expect(next.mock.calls[0][0]).toEqual(expect.objectContaining({
                 statusCode: httpStatus.BAD_REQUEST,
@@ -53,12 +53,12 @@ describe('Error Middleware', () => {
                 isOperational: false,
             }));
         });
-        
+
         test('should convert an Error without status to Internal Server Error', () => {
             const error = new Error('Any error');
-            
+
             errorConverter(error, req, res, next);
-            
+
             expect(next).toHaveBeenCalledWith(expect.any(ApiError));
             expect(next.mock.calls[0][0]).toEqual(expect.objectContaining({
                 statusCode: httpStatus.INTERNAL_SERVER_ERROR,
@@ -76,19 +76,19 @@ describe('Error Middleware', () => {
             res = httpMocks.createResponse();
             next = jest.fn();
             res.status = jest.fn().mockReturnValue(res);
-            res.json = jest.fn().mockReturnValue(res); // Mock json instead of send
+            res.send = jest.fn().mockReturnValue(res);
             mockConfig.env = 'development';
-            jest.spyOn(console, 'error').mockImplementation(() => {});
+            jest.spyOn(console, 'error').mockImplementation(() => { });
         });
-        
+
         afterEach(() => {
             jest.clearAllMocks();
         });
 
-        test('should send proper error response', () => {
+        test('should send proper error response using res.json', () => {
             const error = new ApiError(httpStatus.BAD_REQUEST, 'Any error');
             const res = httpMocks.createResponse();
-            const jsonSpy = jest.spyOn(res, 'json'); // Spy on json
+            const jsonSpy = jest.spyOn(res, 'json');
 
             errorHandler(error, req, res, next);
 
@@ -100,32 +100,33 @@ describe('Error Middleware', () => {
             }));
         });
 
-        test('should put the stack in the response if in development mode', () => {
+        test('should include stack in the response in development mode', () => {
             mockConfig.env = 'development';
             const error = new ApiError(httpStatus.BAD_REQUEST, 'Any error');
             const res = httpMocks.createResponse();
-            const jsonSpy = jest.spyOn(res, 'json'); // Spy on json
+            const jsonSpy = jest.spyOn(res, 'json');
 
             errorHandler(error, req, res, next);
 
             expect(jsonSpy).toHaveBeenCalledWith(expect.objectContaining({
                 code: httpStatus.BAD_REQUEST,
-                message: error.message, 
-                stack: error.stack
+                message: error.message,
+                stack: error.stack,
             }));
         });
 
-        test('should NOT put the stack in the response if in production mode', () => {
-             mockConfig.env = 'production';
-             const error = new ApiError(httpStatus.BAD_REQUEST, 'Any error');
-             const res = httpMocks.createResponse();
-             const jsonSpy = jest.spyOn(res, 'json'); // Spy on json
+        test('should NOT include stack in the response in production mode', () => {
+            mockConfig.env = 'production';
+            // isOperational:false => gets mapped to 500 in production
+            const error = new ApiError(httpStatus.BAD_REQUEST, 'Any error', false);
+            const res = httpMocks.createResponse();
+            const jsonSpy = jest.spyOn(res, 'json');
 
-             errorHandler(error, req, res, next);
+            errorHandler(error, req, res, next);
 
-             expect(jsonSpy).toHaveBeenCalledWith(expect.not.objectContaining({
-                 stack: expect.anything()
-             }));
+            expect(jsonSpy).toHaveBeenCalledWith(expect.not.objectContaining({
+                stack: expect.anything(),
+            }));
         });
     });
 });
