@@ -50,6 +50,9 @@ model User {
   ownedWorkspaces  Workspace[]
   sentInvites  WorkspaceInvite[] @relation("UserInvites")
 
+  receivedNotifications  Notification[] @relation("ReceivedNotifications")
+  triggeredNotifications Notification[] @relation("TriggeredNotifications")
+
   createdEnvironments Environment[]
   createdVariables    EnvironmentVariable[]
   accessibleEnvironments UserEnvironment[]
@@ -78,6 +81,49 @@ model Identity {
   @@unique([provider, providerId])
   @@unique([userId, provider])
   @@map("identities")
+}
+
+///////////////////////////////////////////////////////
+// NOTIFICATIONS
+///////////////////////////////////////////////////////
+
+enum NotificationType {
+  WORKSPACE_INVITE
+  MEMBER_JOINED
+  ROLE_UPDATED
+  WORKFLOW_SUCCESS
+  WORKFLOW_FAILED
+  SYSTEM_ALERT
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")      // The recipient
+  actorId     String?          @map("actor_id")     // Who caused it? (Null if system-generated)
+  
+  type        NotificationType
+  title       String
+  message     String
+  
+  isRead      Boolean          @default(false) @map("is_read")
+  
+  // --- The Interactive Payload ---
+  // Store dynamic variables here to build routes on the frontend
+  // Example: { "workspaceId": "...", "workflowId": "...", "executionId": "..." }
+  metadata    Json?            
+  
+  // Optional explicit URL if you want the backend to dictate the exact route
+  actionUrl   String?          @map("action_url")   
+
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  user        User             @relation("ReceivedNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor       User?            @relation("TriggeredNotifications", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
 }
 
 ///////////////////////////////////////////////////////
@@ -115,6 +161,8 @@ model WorkspaceMember {
   userId      String        @map("user_id")
   role        WorkspaceRole @default(VIEWER)
   joinedAt    DateTime      @default(now()) @map("joined_at")
+
+  isFavorite  Boolean       @default(false) @map("is_favorite")
 
   user        User          @relation(fields: [userId], references: [id])
   workspace   Workspace     @relation(fields: [workspaceId], references: [id])
@@ -184,7 +232,6 @@ model RequestDefinition {
   deletedAt    DateTime? @map("deleted_at")
 
   collection   Collection @relation(fields: [collectionId], references: [id])
-  workflowSteps WorkflowStep[]
 
   @@map("request_definitions")
 }
@@ -259,12 +306,16 @@ model Workflow {
   name          String
   description   String?
 
+  pinned        Boolean  @default(false)
+
+  // THE ENGINE: Stores the entire React Flow graph (nodes & edges)
+  flowData      Json     @default("{\"nodes\":[], \"edges\":[]}") @map("flow_data")
+
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
-  steps         WorkflowStep[]
   executions    WorkflowExecution[]
 
   @@index([workspaceId])
@@ -272,20 +323,6 @@ model Workflow {
   @@map("workflows")
 }
 
-model WorkflowStep {
-  id            String   @id @default(uuid())
-  workflowId    String   @map("workflow_id")
-  requestId     String   @map("request_id")
-  order         Int
-  stopOnFailure Boolean  @default(true)
-
-  workflow      Workflow @relation(fields: [workflowId], references: [id])
-  request       RequestDefinition @relation(fields: [requestId], references: [id])
-
-  @@unique([workflowId, order])
-  @@index([workflowId])
-  @@map("workflow_steps")
-}
 
 model WorkflowExecution {
   id            String                   @id @default(uuid())
@@ -294,6 +331,10 @@ model WorkflowExecution {
   apiKeyId      String?                  @map("api_key_id")
 
   status        WorkflowExecutionStatus  @default(PENDING)
+
+  // THE MEMORY: Stores variables, responses, and the step-by-step logs
+  contextData   Json?                    @map("context_data")
+  executionLogs Json?                    @map("execution_logs") 
 
   startedAt     DateTime                 @default(now()) @map("started_at")
   completedAt   DateTime?                @map("completed_at")

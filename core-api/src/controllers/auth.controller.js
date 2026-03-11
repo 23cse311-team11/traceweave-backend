@@ -1,5 +1,5 @@
 import httpStatus from 'http-status';
-import { createUser, loginUserWithEmailAndPassword, getUserById } from '../services/auth.service.js';
+import { createUser, loginUserWithEmailAndPassword, getUserById, updateUser } from '../services/auth.service.js';
 import { generateAuthTokens } from '../services/token.service.js';
 import { clearUserCookies } from '../services/cookie.service.js';
 import config from '../config/config.js';
@@ -49,6 +49,22 @@ export const getMe = async (req, res) => {
     user,
   });
 };
+
+export const updateProfile = catchAsync(async (req, res) => {
+  const updateBody = {
+    fullName: req.body.fullName,
+    avatarUrl: req.body.avatarUrl,
+  };
+  
+  // Remove undefined fields
+  Object.keys(updateBody).forEach(key => updateBody[key] === undefined && delete updateBody[key]);
+
+  const user = await updateUser(req.user.id, updateBody);
+  res.json({
+    isAuthenticated: true,
+    user,
+  });
+});
 
 export const logout = async (req, res) => {
   // 1. Clear the Auth Token (Cookie)

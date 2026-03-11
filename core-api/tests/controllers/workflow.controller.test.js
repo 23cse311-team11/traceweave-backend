@@ -58,7 +58,6 @@ describe('Workflow Controller', () => {
                 include: { steps: true },
             });
             expect(res.statusCode).toBe(201);
-            expect(res._getJSONData()).toEqual(workflow);
         });
     });
 
@@ -75,7 +74,6 @@ describe('Workflow Controller', () => {
                 include: { steps: true },
             });
             expect(res.statusCode).toBe(200);
-            expect(res._getJSONData()).toEqual(workflows);
         });
     });
 

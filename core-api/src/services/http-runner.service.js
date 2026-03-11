@@ -92,6 +92,37 @@ const processBody = (bodyDef, headers) => {
   return JSON.stringify(bodyDef);
 };
 
+/**
+ * Helper: Downloads Cloudinary files into memory buffers right before execution
+ */
+const resolveCloudFiles = async (bodyDef) => {
+  if (!bodyDef || typeof bodyDef !== 'object') return;
+
+  const downloadFile = async (url) => {
+      const res = await fetch(url);
+      const arrayBuffer = await res.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+  };
+
+  // 1. Resolve Form-Data Cloud Files
+  if (bodyDef.type === 'formdata' && Array.isArray(bodyDef.formdata)) {
+      for (let item of bodyDef.formdata) {
+          if (item.isFile && item.value?.isCloud && item.value?.url) {
+              try {
+                  item.value.buffer = await downloadFile(item.value.url);
+              } catch (e) { console.error(`Cloud download failed: ${item.value.url}`, e); }
+          }
+      }
+  }
+
+  // 2. Resolve Binary Cloud Files
+  if (bodyDef.type === 'binary' && bodyDef.binaryFile?.isCloud && bodyDef.binaryFile?.url) {
+      try {
+          bodyDef.binaryFile.buffer = await downloadFile(bodyDef.binaryFile.url);
+      } catch (e) { console.error(`Cloud download failed: ${bodyDef.binaryFile.url}`, e); }
+  }
+};
+
 
 export const executeHttpRequest = (requestConfig, cookieJar = null) => {
   return new Promise(async (resolve) => {
@@ -149,6 +180,7 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
       });
 
       // 3. PROCESS BODY (This mutates safeHeaders if it's form-data)
+      await resolveCloudFiles(body);
       const requestPayload = processBody(body, safeHeaders);
 
       // 4. CALCULATE CONTENT-LENGTH (Only if it's NOT a stream)
@@ -161,8 +193,19 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
         try {
            const cookieString = await cookieJar.getCookieString(url);
            if (cookieString) {
-              const existingCookie = safeHeaders['Cookie'] || safeHeaders['cookie'];
-              safeHeaders['Cookie'] = existingCookie ? `${existingCookie}; ${cookieString}` : cookieString;
+              let existingCookie = '';
+              
+              // FIND AND REMOVE OLD CASING TO PREVENT NODE.JS DUPLICATION
+              const cookieKey = Object.keys(safeHeaders).find(k => k.toLowerCase() === 'cookie');
+              if (cookieKey) {
+                  existingCookie = safeHeaders[cookieKey];
+                  delete safeHeaders[cookieKey]; 
+              }
+              
+              // In HTTP, the last matching cookie key-value pair usually takes precedence.
+              // Therefore, we append existingCookie (the user's manually defined request cookies)
+              // AFTER cookieString (the Jar cookies) so they have higher priority.
+              safeHeaders['Cookie'] = existingCookie ? `${cookieString}; ${existingCookie}` : cookieString;
            }
         } catch (e) { console.warn("Cookie injection failed", e); }
       }
