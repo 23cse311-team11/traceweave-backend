@@ -33,7 +33,7 @@ const mockHttpRunner = { executeHttpRequest: jest.fn() };
 
 // jest.unstable_mockModule('../../src/config/prisma.js', () => ({ default: mockPrisma }));
 // jest.unstable_mockModule('../../src/config/mongo.js', () => ({ default: jest.fn().mockResolvedValue(true) }));
-// jest.unstable_mockModule('../../src/models/execution.model.js', () => ({ default: mockExecutionLog }));
+jest.unstable_mockModule('../../src/models/execution.model.js', () => ({ default: mockExecutionLog }));
 jest.unstable_mockModule('../../src/models/workflow-log.model.js', () => ({ default: { create: jest.fn() } }));
 jest.unstable_mockModule('../../src/services/http-runner.service.js', () => mockHttpRunner);
 jest.unstable_mockModule('nodemailer', () => ({
@@ -147,7 +147,6 @@ describe('Suite B — API + Automated Testing Module', () => {
         const res = await request(app)
             .post('/v1/workflows/wf-1/run')
             .set('Cookie', `token=${token}`);
-
         expect(res.status).toBe(200);
         expect(res.body.message).toMatch(/workflow execution completed/i);
         expect(res.body.report).toMatchObject({
@@ -247,3 +246,5 @@ describe('Suite B — API + Automated Testing Module', () => {
     });
 });
 
+
+// integration testing step
