@@ -207,3 +207,5 @@ describe('Suite H — DB Connectivity Smoke Tests', () => {
         expect(typeof reachable).toBe('boolean');
     });
 });
+
+// integration testing step
