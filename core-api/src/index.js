@@ -39,7 +39,7 @@ app.get('/health', (req, res) => {
   res.status(200).send({ status: 'OK', service: 'Core API' });
 });
 
-app.use('/v1', routes);
+app.use('/api/v1', routes);
 
 // 404 Handler (for unknown routes)
 app.use((req, res, next) => {
