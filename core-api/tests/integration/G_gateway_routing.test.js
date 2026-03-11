@@ -140,3 +140,5 @@ describe('Suite G — Gateway ↔ Backend Routing', () => {
         expect(res.data).toMatchObject({ status: 'ok' });
     });
 });
+
+// integration testing step
