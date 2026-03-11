@@ -34,7 +34,8 @@ const mockControllers = {
     acceptWorkspaceInvite: jest.fn((req, res) => res.status(200).json({})),
     toggleCommonLink: jest.fn((req, res) => res.status(200).json({})),
     resetCommonLink: jest.fn((req, res) => res.status(200).json({})),
-    // Added to match environment.controller exports used in workspace routes
+    duplicateWorkspace: jest.fn((req, res) => res.status(201).json({ id: 'ws-copy' })),
+    toggleFavorite: jest.fn((req, res) => res.status(200).json({})),
     getGlobalEnvironments: jest.fn((req, res) => res.status(200).json([])),
 };
 
@@ -65,6 +66,8 @@ jest.unstable_mockModule('../../src/controllers/workspace.controller.js', () => 
     acceptWorkspaceInvite: mockControllers.acceptWorkspaceInvite,
     toggleCommonLink: mockControllers.toggleCommonLink,
     resetCommonLink: mockControllers.resetCommonLink,
+    duplicateWorkspace: mockControllers.duplicateWorkspace,
+    toggleFavorite: mockControllers.toggleFavorite,
 }));
 
 // Mock the Environment Controller (Environment functions are used in Workspace routes)

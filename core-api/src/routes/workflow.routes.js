@@ -22,6 +22,9 @@ router.patch('/:workflowId', requireWorkspaceRole('EDITOR'), workflowController.
 // Run (Editor+) - Running consumes resources/changes state
 router.post('/:workflowId/run', requireWorkspaceRole('EDITOR'), workflowController.runWorkflow);
 
+// Run Canvas Workflow
+router.post('/run-canvas', workflowController.runCanvasWorkflow);
+
 // History (Viewer+)
 router.get('/:workflowId/history', requireWorkspaceRole('VIEWER'), workflowController.getWorkflowHistory);
 

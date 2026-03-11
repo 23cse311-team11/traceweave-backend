@@ -9,6 +9,17 @@ import { environmentService } from '../services/environment.service.js';
 import { substituteVariables } from '../services/variableSubstitution.service.js';
 import { loadCookieJar, persistCookieJar } from '../services/cookie.service.js';
 
+const getPayloadSize = (value) => {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === 'string') return Buffer.byteLength(value, 'utf8');
+
+  try {
+    return Buffer.byteLength(JSON.stringify(value), 'utf8');
+  } catch {
+    return 0;
+  }
+};
+
 export const requestController = {
 
   /* ===========================
@@ -74,11 +85,23 @@ export const requestController = {
         const dbConfig = requestDef.config || {};
         let overrideConfig = overrides.config || {};
 
+        // Convert DB arrays to objects so they merge gracefully with the overridden config objects
+        const formatDbList = (list) => {
+            if (!Array.isArray(list)) return list || {};
+            return list.reduce((acc, item) => {
+                if (item.key && item.active !== false) acc[item.key] = item.value;
+                return acc;
+            }, {});
+        };
+
+        const safeDbHeaders = formatDbList(dbConfig.headers);
+        const safeDbParams = formatDbList(dbConfig.params);
+
         let config = {
           method: overrideConfig.method ?? dbConfig.method ?? 'GET',
           url: overrideConfig.url ?? dbConfig.url ?? '',
-          headers: { ...(dbConfig.headers || {}), ...(overrideConfig.headers || {}) },
-          params: { ...(dbConfig.params || {}), ...(overrideConfig.params || {}) },
+          headers: { ...safeDbHeaders, ...(overrideConfig.headers || {}) },
+          params: { ...safeDbParams, ...(overrideConfig.params || {}) },
           body: overrideConfig.body ?? dbConfig.body,
         };
 
@@ -119,7 +142,10 @@ export const requestController = {
 
         const executionLog = await ExecutionLog.create({
           requestId: requestDef.id, collectionId: requestDef.collectionId, workspaceId,
+          protocol: requestDef.protocol,
           environmentId: environmentId || null, method: config.method, url: config.url,
+          requestBody: requestDef.config?.body || null, // We save the original request body from DB for reference, not the overridden one from the client
+          requestHeaders: config.headers || null,
           status: result.status, statusText: result.statusText, responseHeaders: result.headers,
           responseBody: result.data, responseSize: result.size, timings: result.timings, executedBy: userId,
         });
@@ -195,8 +221,10 @@ export const requestController = {
 
       const executionLog = await ExecutionLog.create({
         requestId: null, collectionId: null, workspaceId,
+        protocol,
         environmentId: environmentId || null, method: execConfig.method, url: execConfig.url,
         status: result.status, statusText: result.statusText, responseHeaders: result.headers,
+        requestBody: execConfig.body || null, requestHeaders: execConfig.headers || null,
         responseBody: result.data, responseSize: result.size, timings: result.timings, executedBy: userId,
       });
 
@@ -231,7 +259,18 @@ export const requestController = {
    */
   syncExecutionHistory: catchAsync(async (req, res) => {
     try {
-      const { requestId, workspaceId, protocol, url, method, responseMeta } = req.body;
+      const {
+        requestId,
+        workspaceId,
+        protocol,
+        url,
+        method,
+        requestHeaders,
+        requestBody,
+        responseHeaders,
+        responseBody,
+        responseMeta,
+      } = req.body;
       const userId = req.user.id;
 
       if (!workspaceId) {
@@ -251,32 +290,36 @@ export const requestController = {
       }
 
       // Create the MongoDB history document using your existing schema
+      const timingDefaults = {
+        dnsLookup: 0,
+        tcpConnection: 0,
+        tlsHandshake: 0,
+        firstByte: 0,
+        download: 0,
+        total: responseMeta?.time || 0,
+      };
+
       const executionLog = await ExecutionLog.create({
         requestId: requestId || null,
         collectionId: collectionId,
         workspaceId,
         environmentId: null, // Optional: You could pass this from the frontend if needed
+        protocol: protocol || 'http',
         method: method || 'GET',
         url: url,
-        
-        // We only save the metadata to save bandwidth and DB space.
-        // We do NOT save the requestBody or responseBody here because 
-        // passing heavy files/JSON over the wire just for logging defeats the purpose of local execution.
+
+        requestHeaders: requestHeaders || null,
+        requestBody: requestBody || null,
         status: responseMeta.status,
         statusText: responseMeta.statusText,
-        responseSize: responseMeta.size,
-        
+        responseHeaders: responseHeaders || null,
+        responseBody: responseBody ?? null,
+        responseSize: responseMeta.size || getPayloadSize(responseBody),
         timings: {
-          total: responseMeta.time,
-          // Since it's a local execution, we might not have the full waterfall 
-          // from Electron unless we built a custom HTTP agent. We default to the total.
-          dnsLookup: 0,
-          tcpConnection: 0,
-          tlsHandshake: 0,
-          firstByte: 0,
-          download: 0,
+          ...timingDefaults,
+          ...(responseMeta?.timings || {}),
+          total: responseMeta?.timings?.total || responseMeta?.time || 0,
         },
-        
         executedBy: userId,
       });
 

@@ -7,6 +7,7 @@ const executionSchema = new mongoose.Schema({
   environmentId: { type: String, index: true }, // Environment used for variable substitution
 
   // Request Details (Snapshot of what was sent)
+  protocol: { type: String, default: 'http' },
   method: String,
   url: String,
   requestHeaders: mongoose.Schema.Types.Mixed,

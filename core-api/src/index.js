@@ -5,6 +5,9 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 import express from "express";
+import cookie from 'cookie';
+import jwt from 'jsonwebtoken';
+import { WebSocketServer } from 'ws';
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
@@ -60,6 +63,26 @@ const startServer = async () => {
     server = app.listen(config.port, () => {
       console.log(`Core API running on port ${config.port} in ${config.env} mode`);
     });
+
+    // Setup WebSockets
+    const wss = new WebSocketServer({ noServer: true });
+    app.set('wss', wss);
+
+    server.on('upgrade', (request, socket, head) => {
+      console.log('UPGRADE RECEIVED:', request.url);
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    });
+
+    wss.on('connection', (ws, req) => {
+      // Expecting ?clientId=xxxx in url
+      const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+      const urlParams = new URLSearchParams(queryString);
+      ws.clientId = urlParams.get('clientId');
+      console.log('WS Client connected:', ws.clientId);
+    });
+
   } catch (error) {
     console.error('Unable to connect to the database:', error);
     process.exit(1);
