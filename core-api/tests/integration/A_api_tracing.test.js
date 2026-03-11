@@ -222,3 +222,5 @@ describe('Suite A — API ↔ Distributed Tracing', () => {
         expect(mockExecuteHttpRequest).not.toHaveBeenCalled();
     });
 });
+
+// integration testing step
