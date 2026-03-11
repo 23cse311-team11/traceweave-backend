@@ -1,14 +1,14 @@
 import { jest } from '@jest/globals';
 
-// Mocks
+// Mocks — match the actual workflow-runner.service.js source
 const mockPrisma = {
-  workflow: {
-    findUnique: jest.fn(),
-  },
   workflowExecution: {
     create: jest.fn(),
     update: jest.fn(),
-  }
+  },
+  workflow: {
+    findUnique: jest.fn(),
+  },
 };
 
 const mockExecutionLog = {
@@ -35,72 +35,150 @@ jest.unstable_mockModule('../../src/services/http-runner.service.js', () => ({
 const { executeWorkflow } = await import('../../src/services/workflow-runner.service.js');
 
 describe('Workflow Runner Service', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
+  const workflowId = 'wf1';
+  const userId = 'user1';
+  const executionRecord = { id: 'exec1' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma.workflowExecution.create.mockResolvedValue(executionRecord);
+    mockPrisma.workflowExecution.update.mockResolvedValue({});
+    mockExecutionLog.create.mockResolvedValue({ _id: 'log1' });
+  });
+
+  test('should create execution record and return SUCCESS when all steps pass', async () => {
+    const workflow = {
+      id: workflowId,
+      workspaceId: 'ws1',
+      steps: [
+        {
+          id: 'step1',
+          order: 0,
+          stopOnFailure: true,
+          request: { id: 'req1', collectionId: 'col1', method: 'GET', url: 'http://example.com' },
+        },
+      ],
+    };
+
+    mockPrisma.workflow.findUnique.mockResolvedValue(workflow);
+    mockHttpRunner.executeHttpRequest.mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      headers: { 'content-type': 'application/json' },
+      data: { ok: true },
+      size: 50,
+      timings: { total: 30 },
+      success: true,
     });
 
-    test('should execute workflow successfully', async () => {
-        const workflowId = 'wf1';
-        const userId = 'user1';
-        
-        // Mock data matching the new node-based structure
-        const workflow = {
-            id: workflowId,
-            workspaceId: 'ws1',
-            flowData: {
-                nodes: [
-            { id: 'start1', type: 'startNode', data: {} },
-            { id: 'node1', type: 'requestNode', data: { requestId: 'req1' } },
-            { id: 'end1', type: 'endNode', data: {} }
-                ],
-          edges: [
-            { source: 'start1', target: 'node1' },
-            { source: 'node1', target: 'end1' }
-          ]
-            }
-        };
+    const result = await executeWorkflow(workflowId, userId);
 
-        const reqDef1 = { id: 'req1', config: { method: 'GET', url: 'http://api.com/1' } };
+    expect(mockPrisma.workflowExecution.create).toHaveBeenCalledWith({
+      data: {
+        workflowId,
+        triggeredById: userId,
+        status: 'RUNNING',
+        startedAt: expect.any(Date),
+      },
+    });
+    expect(mockPrisma.workflow.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: workflowId } })
+    );
+    expect(mockHttpRunner.executeHttpRequest).toHaveBeenCalledTimes(1);
+    expect(mockExecutionLog.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.workflowExecution.update).toHaveBeenCalledWith({
+      where: { id: 'exec1' },
+      data: { status: 'SUCCESS', completedAt: expect.any(Date) },
+    });
+    expect(result).toEqual({ executionId: 'exec1', status: 'SUCCESS' });
+  });
 
-        mockPrisma.workflowExecution.create.mockResolvedValue({ id: 'exec_id' });
-        mockPrisma.workflow.findUnique.mockResolvedValue(workflow);
-        // Mock the findMany for request definitions inside the service
-        mockPrisma.requestDefinition = { findMany: jest.fn().mockResolvedValue([reqDef1]) };
-        mockHttpRunner.executeHttpRequest.mockResolvedValue({
-          status: 200,
-          data: { ok: true },
-          headers: {},
-          timings: { total: 10 },
-        });
+  test('should stop on failure and mark execution as FAILED', async () => {
+    const workflow = {
+      id: workflowId,
+      workspaceId: 'ws1',
+      steps: [
+        {
+          id: 'step1',
+          order: 0,
+          stopOnFailure: true,
+          request: { id: 'req1', collectionId: 'col1', method: 'GET', url: 'http://fail.com' },
+        },
+        {
+          id: 'step2',
+          order: 1,
+          stopOnFailure: true,
+          request: { id: 'req2', collectionId: 'col1', method: 'GET', url: 'http://ok.com' },
+        },
+      ],
+    };
 
-        // Mock Engine run
-        // Note: Since WorkflowEngine is a class, we need to mock its prototype or the module
-        // For simplicity in this fix, we ensure the service can reach the engine run
-        
-        mockPrisma.workflowExecution.update.mockResolvedValue({ id: 'exec_id', status: 'SUCCESS' });
-
-        const result = await executeWorkflow(workflowId, userId);
-
-        expect(mockPrisma.workflowExecution.create).toHaveBeenCalledWith(expect.objectContaining({
-            data: expect.objectContaining({ status: 'RUNNING' })
-        }));
-        
-        // Expect findUnique without the old 'steps' include
-        expect(mockPrisma.workflow.findUnique).toHaveBeenCalledWith({
-            where: { id: workflowId }
-        });
-        
-        expect(result.status).toBe('SUCCESS');
+    mockPrisma.workflow.findUnique.mockResolvedValue(workflow);
+    mockHttpRunner.executeHttpRequest.mockResolvedValue({
+      status: 500,
+      statusText: 'Server Error',
+      headers: {},
+      data: null,
+      size: 0,
+      timings: { total: 20 },
+      success: false,
     });
 
-    test('should handle empty workflow data', async () => {
-        const workflowId = 'wf1';
-      const workflow = { id: workflowId, flowData: { nodes: [] } }; // Empty nodes
-        
-        mockPrisma.workflowExecution.create.mockResolvedValue({ id: 'exec_id' });
-        mockPrisma.workflow.findUnique.mockResolvedValue(workflow);
-        mockPrisma.workflowExecution.update.mockResolvedValue({});
+    const result = await executeWorkflow(workflowId, userId);
 
-        await expect(executeWorkflow(workflowId, 'u1')).rejects.toThrow('No start node found in workflow');
+    // Should stop after first step failure
+    expect(mockHttpRunner.executeHttpRequest).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.workflowExecution.update).toHaveBeenCalledWith({
+      where: { id: 'exec1' },
+      data: { status: 'FAILED', completedAt: expect.any(Date) },
     });
+    expect(result).toEqual({ executionId: 'exec1', status: 'FAILED' });
+  });
+
+  test('should skip steps with missing request and continue when stopOnFailure is false', async () => {
+    const workflow = {
+      id: workflowId,
+      workspaceId: 'ws1',
+      steps: [
+        { id: 'step1', order: 0, stopOnFailure: false, request: null }, // no request
+        {
+          id: 'step2',
+          order: 1,
+          stopOnFailure: false,
+          request: { id: 'req2', collectionId: 'col1', method: 'GET', url: 'http://ok.com' },
+        },
+      ],
+    };
+
+    mockPrisma.workflow.findUnique.mockResolvedValue(workflow);
+    mockHttpRunner.executeHttpRequest.mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: {},
+      size: 10,
+      timings: { total: 5 },
+      success: true,
+    });
+
+    await executeWorkflow(workflowId, userId);
+
+    // First step has no request, skipped. Second step executed.
+    expect(mockHttpRunner.executeHttpRequest).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.workflowExecution.update).toHaveBeenCalledWith({
+      where: { id: 'exec1' },
+      data: { status: 'SUCCESS', completedAt: expect.any(Date) },
+    });
+  });
+
+  test('should mark FAILED and rethrow if workflow not found', async () => {
+    mockPrisma.workflow.findUnique.mockResolvedValue(null);
+
+    await expect(executeWorkflow(workflowId, userId)).rejects.toThrow('Workflow not found');
+
+    expect(mockPrisma.workflowExecution.update).toHaveBeenCalledWith({
+      where: { id: 'exec1' },
+      data: { status: 'FAILED', completedAt: expect.any(Date) },
+    });
+  });
 });
