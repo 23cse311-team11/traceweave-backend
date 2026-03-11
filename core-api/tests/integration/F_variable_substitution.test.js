@@ -229,3 +229,5 @@ describe('Suite F — Variable Substitution → HTTP Pipeline', () => {
     });
 });
 
+
+// integration testing step
