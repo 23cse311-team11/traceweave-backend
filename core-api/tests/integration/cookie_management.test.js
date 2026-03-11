@@ -138,3 +138,5 @@ describe('Cookie Management Integration', () => {
         });
     });
 });
+
+// integration testing step
