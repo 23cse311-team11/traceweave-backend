@@ -35,11 +35,16 @@ export const deleteCollection = catchAsync(async (req, res) => {
 
 export const updateCollection = catchAsync(async (req, res) => {
   const { collectionId } = req.params;
-  const { name } = req.body;
-  // Removed userId
+  const { name, parentId, order } = req.body;
+  
+  const updateData = {};
+  if (name !== undefined) updateData.name = name;
+  if (parentId !== undefined) updateData.parentId = parentId;
+  if (order !== undefined) updateData.order = order;
+
   const collection = await CollectionService.updateCollection(
     collectionId, 
-    { name }
+    updateData
   );
 
   res.status(httpStatus.OK).send(collection);

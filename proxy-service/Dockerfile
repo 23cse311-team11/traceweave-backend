@@ -6,6 +6,6 @@ RUN pip install --no-cache-dir mitmproxy requests
 
 COPY . .
 
-EXPOSE 9000
+EXPOSE 8080 8081
 
-CMD ["mitmdump", "-p", "9000", "-s", "main.py"]
+CMD ["mitmweb", "--web-host", "0.0.0.0", "--web-port", "8081", "-p", "8080", "-s", "main.py"]

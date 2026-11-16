@@ -46,31 +46,37 @@ export class CollectionService {
         );
       }
 
-      return prisma.collection.findMany({
+      const allCols = await prisma.collection.findMany({
         where: {
           workspaceId,
           deletedAt: null,
-          parentId: null
         },
         orderBy: { order: 'asc' },
         include: {
-          children: {
-            where: { deletedAt: null },
-            orderBy: { order: 'asc' },
-            include: {
-              children: true,
-              requests: {
-                where: { deletedAt: null },
-                orderBy: { order: 'asc' },
-              }
-            }
-          },
           requests: {
             where: { deletedAt: null },
-            orderBy: { order: 'asc' }
-          }
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+
+      // Construct nested tree recursively to support arbitrary depth
+      const colMap = new Map();
+      allCols.forEach((col) => {
+        colMap.set(col.id, { ...col, children: [] });
+      });
+
+      const rootCols = [];
+      allCols.forEach((col) => {
+        const item = colMap.get(col.id);
+        if (col.parentId && colMap.has(col.parentId)) {
+          colMap.get(col.parentId).children.push(item);
+        } else {
+          rootCols.push(item);
         }
       });
+
+      return rootCols;
     } catch (error) {
       console.error("Error fetching collections:", error);
       throw new ApiError(
@@ -144,6 +150,47 @@ export class CollectionService {
         httpStatus.NOT_FOUND,
         'Collection not found'
       );
+    }
+
+    // Validate parentId if updating
+    if (updateBody.parentId !== undefined && updateBody.parentId !== null) {
+      if (updateBody.parentId === collectionId) {
+        throw new ApiError(
+          httpStatus.BAD_REQUEST,
+          'A collection cannot be its own parent'
+        );
+      }
+
+      const parent = await prisma.collection.findFirst({
+        where: {
+          id: updateBody.parentId,
+          workspaceId: collection.workspaceId,
+          deletedAt: null
+        }
+      });
+
+      if (!parent) {
+        throw new ApiError(
+          httpStatus.NOT_FOUND,
+          'Parent collection not found'
+        );
+      }
+
+      // Anti-cyclic check: ensure new parent is not a descendant of collectionId
+      let currentParentId = parent.parentId;
+      while (currentParentId) {
+        if (currentParentId === collectionId) {
+          throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            'Cannot move collection into its own descendant'
+          );
+        }
+        const p = await prisma.collection.findUnique({
+          where: { id: currentParentId },
+          select: { parentId: true }
+        });
+        currentParentId = p?.parentId || null;
+      }
     }
 
     return prisma.collection.update({
