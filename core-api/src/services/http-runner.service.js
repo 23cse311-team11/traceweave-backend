@@ -219,14 +219,19 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
       const isHttps = parsedUrl.protocol === 'https:';
       const lib = isHttps ? https : http;
       
+      const isIpv6 = parsedUrl.hostname.startsWith('[') || (parsedUrl.hostname.includes(':') && !parsedUrl.hostname.includes('.'));
+      const family = isIpv6 ? 6 : 4;
+
       const options = {
         method,
-        hostname: parsedUrl.hostname,
+        hostname: parsedUrl.hostname.replace(/^\[|\]$/g, ''),
         port: parsedUrl.port || (isHttps ? 443 : 80),
         path: parsedUrl.pathname + parsedUrl.search,
         headers: safeHeaders,
         timeout: requestConfig.timeout || 60000, 
         rejectUnauthorized: false,
+        family,
+        autoSelectFamily: false,
       };
 
       // --- EXECUTION ---
@@ -265,6 +270,11 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
         const handshakeEnd = (isHttps && tlsEnd) ? tlsEnd : (connectEnd || timings.start);
         timings.firstByte = responseStart - handshakeEnd;
 
+        res.on('error', (resErr) => {
+          console.error('[HTTP-RUNNER RES ERROR]:', resErr);
+          safeResolve(createErrorResponse(extractErrorMessage(resErr), Date.now() - timings.start));
+        });
+
         const chunks = [];
         let size = 0;
 
@@ -282,16 +292,18 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
           let decodedBuffer = buffer;
           const encoding = (res.headers['content-encoding'] || '').toLowerCase();
 
-          try {
-              if (encoding === 'gzip') {
-                  decodedBuffer = zlib.gunzipSync(buffer);
-              } else if (encoding === 'deflate') {
-                  decodedBuffer = zlib.inflateSync(buffer);
-              } else if (encoding === 'br') {
-                  decodedBuffer = zlib.brotliDecompressSync(buffer);
-              }
-          } catch (err) {
-              console.warn("Decompression failed, returning raw buffer", err);
+          if (buffer.length > 0 && encoding) {
+            try {
+                if (encoding === 'gzip') {
+                    decodedBuffer = zlib.gunzipSync(buffer);
+                } else if (encoding === 'deflate') {
+                    decodedBuffer = zlib.inflateSync(buffer);
+                } else if (encoding === 'br') {
+                    decodedBuffer = zlib.brotliDecompressSync(buffer);
+                }
+            } catch (err) {
+                console.warn("Decompression failed, returning raw buffer", err);
+            }
           }
 
           let data = decodedBuffer.toString('utf8');
@@ -314,7 +326,7 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
           safeResolve({
             success: true,
             status: res.statusCode,
-            statusText: res.statusMessage || http.STATUS_CODES[res.statusCode] || '',
+            statusText: res.statusMessage || http?.STATUS_CODES?.[res.statusCode] || '',
             headers: res.headers,
             data,
             cookies: parsedCookies,
@@ -325,7 +337,8 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
       });
 
       req.on('error', (err) => {
-         safeResolve(createErrorResponse(err.message, Date.now() - timings.start));
+         console.error('[HTTP-RUNNER ERROR]:', err);
+         safeResolve(createErrorResponse(extractErrorMessage(err), Date.now() - timings.start));
       });
 
       req.on('timeout', () => {
@@ -349,17 +362,48 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
       }
 
     } catch (globalError) {
-      safeResolve(createErrorResponse(globalError.message, 0));
+      console.error('[HTTP-RUNNER GLOBAL ERROR]:', globalError);
+      safeResolve(createErrorResponse(extractErrorMessage(globalError), 0));
     }
   });
 };
 
-const createErrorResponse = (message, totalTime) => ({
-  success: false,
-  status: 0,
-  statusText: 'Error',
-  headers: {},
-  data: { error: message || "Unknown Error" },
-  size: 0,
-  timings: { start: 0, dnsLookup: 0, tcpConnection: 0, tlsHandshake: 0, firstByte: 0, download: 0, total: totalTime },
-});
+const extractErrorMessage = (err) => {
+  if (!err) return 'Unknown Network Error';
+  if (typeof err === 'string' && err.trim().length > 0) return err;
+
+  // Node.js AggregateError (contains multiple sub-errors from happy eyeballs / socket connect)
+  if (Array.isArray(err.errors) && err.errors.length > 0) {
+    const subMessages = err.errors
+      .map(e => (typeof e === 'object' ? (e.message || e.code) : String(e)))
+      .filter(Boolean);
+    if (subMessages.length > 0) {
+      return `${err.code || 'Connection Failed'}: ${subMessages.join(', ')}`;
+    }
+  }
+
+  if (err.message && typeof err.message === 'string' && err.message.trim().length > 0) {
+    return err.code ? `${err.code}: ${err.message}` : err.message;
+  }
+
+  if (err.code) return `Network Error: ${err.code}`;
+  if (err.name && err.name !== 'Error') return err.name;
+
+  return 'Network Error: Connection failed';
+};
+
+const createErrorResponse = (message, totalTime) => {
+  const errMsg = typeof message === 'string' && message.trim().length > 0
+    ? message
+    : extractErrorMessage(message);
+
+  return {
+    success: false,
+    status: 0,
+    statusText: 'Error',
+    headers: {},
+    data: { error: errMsg },
+    size: 0,
+    timings: { start: 0, dnsLookup: 0, tcpConnection: 0, tlsHandshake: 0, firstByte: 0, download: 0, total: totalTime },
+  };
+};
