@@ -10,7 +10,9 @@ import {
   removeMemberFromWorkspace,
   updateMemberRole,
   getWorkspaceHistory,
+  clearWorkspaceHistory,
   getGlobalHistory,
+  clearGlobalHistory,
   getGlobalStats,
   createWorkspaceInvite,
   getPendingInvites,
@@ -37,6 +39,7 @@ router.post('/create', createWorkspace);
 router.get('/', getMyWorkspaces);
 
 router.get('/user/global-history', getGlobalHistory); 
+router.delete('/user/global-history', clearGlobalHistory);
 router.get('/user/global-stats', getGlobalStats);
 router.get('/user/global-environments', getGlobalEnvironments);
 
@@ -51,6 +54,7 @@ router.post('/:workspaceId/members', requireWorkspaceRole('OWNER'), addMemberToW
 router.delete('/:workspaceId/members/:userId', requireWorkspaceRole('OWNER'), removeMemberFromWorkspace);
 router.patch('/:workspaceId/members/:userId', requireWorkspaceRole('OWNER'), updateMemberRole);
 router.get('/:workspaceId/history', requireWorkspaceRole('VIEWER'), getWorkspaceHistory);
+router.delete('/:workspaceId/history', requireWorkspaceRole('VIEWER'), clearWorkspaceHistory);
 router.post('/:workspaceId/environments', requireWorkspaceRole('EDITOR'), createEnvironment);
 router.get('/:workspaceId/environments', requireWorkspaceRole('VIEWER'), getWorkspaceEnvironments);
 

@@ -18,3 +18,22 @@ export const getExecutionById = catchAsync(async (req, res) => {
 
   res.status(200).json({ data: log });
 });
+
+export const deleteExecutionById = catchAsync(async (req, res) => {
+  const { execId } = req.params;
+  const userId = req.user.id;
+
+  const log = await ExecutionLog.findById(execId);
+
+  if (!log) {
+    return res.status(404).json({ message: 'Execution log not found' });
+  }
+
+  // Security Check: Ensure the user actually executed this
+  if (log.executedBy !== userId) {
+    return res.status(403).json({ message: 'Access denied to this execution log' });
+  }
+
+  await ExecutionLog.findByIdAndDelete(execId);
+  res.status(200).json({ message: 'Execution log deleted successfully' });
+});

@@ -300,6 +300,31 @@ export const getGlobalHistory = async (req, res) => {
   }
 };
 
+export const clearWorkspaceHistory = async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const userId = req.user.id;
+
+    await ExecutionLog.deleteMany({ workspaceId, executedBy: userId });
+    res.status(200).json({ message: 'Workspace history cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing workspace history:', error);
+    res.status(500).json({ error: 'Failed to clear workspace history' });
+  }
+};
+
+export const clearGlobalHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    await ExecutionLog.deleteMany({ executedBy: userId });
+    res.status(200).json({ message: 'Global history cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing global history:', error);
+    res.status(500).json({ error: 'Failed to clear global history' });
+  }
+};
+
 export const getGlobalStats = async (req, res) => {
   try {
     const userId = req.user.id;
