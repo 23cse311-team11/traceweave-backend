@@ -131,8 +131,11 @@ export const requestController = {
             }
         }
 
-        const domain = new URL(config.url).hostname;
-        const jar = await loadCookieJar(userId, workspaceId, domain);
+        let jar = null;
+        try {
+          const urlObj = new URL(config.url.includes('://') ? config.url : `http://${config.url}`);
+          jar = await loadCookieJar(userId, workspaceId, urlObj.hostname);
+        } catch (e) {}
 
         let result;
         if (requestDef.protocol === 'graphql') result = await executeGraphQLRequest({ ...config, url: config.url }, jar);

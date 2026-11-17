@@ -169,13 +169,19 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
           'User-Agent': 'TraceWeaveRuntime/1.0',
           'Accept': '*/*',
           'Connection': 'keep-alive',
-          'Host': parsedUrl.hostname,
           'Accept-Encoding': 'gzip, deflate, br',
           'Postman-Token': uuidv4()
       };
       
       const safeHeaders = { ...defaultHeaders };
-      Object.keys(headers).forEach(key => {
+      // Case-insensitively merge user headers over default headers
+      Object.keys(headers || {}).forEach(key => {
+          const lower = key.toLowerCase();
+          Object.keys(safeHeaders).forEach(defaultKey => {
+              if (defaultKey.toLowerCase() === lower) {
+                  delete safeHeaders[defaultKey];
+              }
+          });
           safeHeaders[key] = headers[key];
       });
 
@@ -219,11 +225,19 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
         port: parsedUrl.port || (isHttps ? 443 : 80),
         path: parsedUrl.pathname + parsedUrl.search,
         headers: safeHeaders,
-        timeout: 10000, 
+        timeout: requestConfig.timeout || 60000, 
+        rejectUnauthorized: false,
       };
 
       // --- EXECUTION ---
-      
+      let isSettled = false;
+      const safeResolve = (val) => {
+        if (!isSettled) {
+          isSettled = true;
+          resolve(val);
+        }
+      };
+
       let dnsEnd = 0, connectEnd = 0, tlsEnd = 0, responseStart = 0;
 
       const req = lib.request(options);
@@ -297,7 +311,7 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
               });
           }
 
-          resolve({
+          safeResolve({
             success: true,
             status: res.statusCode,
             statusText: res.statusMessage || http.STATUS_CODES[res.statusCode] || '',
@@ -311,12 +325,12 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
       });
 
       req.on('error', (err) => {
-         resolve(createErrorResponse(err.message, Date.now() - timings.start));
+         safeResolve(createErrorResponse(err.message, Date.now() - timings.start));
       });
 
       req.on('timeout', () => {
           req.destroy();
-          resolve(createErrorResponse("Request Timed Out", Date.now() - timings.start));
+          safeResolve(createErrorResponse("Request Timed Out (exceeded 60s)", Date.now() - timings.start));
       });
 
       // --- THE FINAL CRUCIAL FIX ---
@@ -335,7 +349,7 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
       }
 
     } catch (globalError) {
-      resolve(createErrorResponse(globalError.message, 0));
+      safeResolve(createErrorResponse(globalError.message, 0));
     }
   });
 };
