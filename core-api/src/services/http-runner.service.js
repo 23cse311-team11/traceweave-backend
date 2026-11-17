@@ -184,8 +184,8 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
       const requestPayload = processBody(body, safeHeaders);
 
       // 4. CALCULATE CONTENT-LENGTH (Only if it's NOT a stream)
-      if (requestPayload && !(requestPayload instanceof FormData)) {
-          safeHeaders['Content-Length'] = Buffer.byteLength(requestPayload);
+      if (requestPayload !== null && requestPayload !== undefined && !(requestPayload instanceof FormData)) {
+          safeHeaders['Content-Length'] = Buffer.byteLength(String(requestPayload));
       }
 
       // 5. COOKIE INJECTION
@@ -325,7 +325,7 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
           requestPayload.pipe(req);
       } 
       // If it's raw string or binary buffer, write it.
-      else if (requestPayload) {
+      else if (requestPayload !== null && requestPayload !== undefined) {
           req.write(requestPayload);
           req.end();
       } 
