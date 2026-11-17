@@ -300,7 +300,7 @@ export const executeHttpRequest = (requestConfig, cookieJar = null) => {
           resolve({
             success: true,
             status: res.statusCode,
-            statusText: res.statusMessage,
+            statusText: res.statusMessage || http.STATUS_CODES[res.statusCode] || '',
             headers: res.headers,
             data,
             cookies: parsedCookies,

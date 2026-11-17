@@ -150,7 +150,7 @@ export const requestController = {
           responseBody: result.data, responseSize: result.size, timings: result.timings, executedBy: userId,
         });
 
-        res.status(200).json({ ...result, time: result.timings.total, historyId: executionLog._id });
+        res.status(200).json({ ...result, time: result.timings?.total || 0, historyId: executionLog._id });
       } catch (error) {
         res.status(500).json({ error: error.message || 'Failed to execute request' });
       }
@@ -228,7 +228,7 @@ export const requestController = {
         responseBody: result.data, responseSize: result.size, timings: result.timings, executedBy: userId,
       });
 
-      res.status(200).json({ ...result, time: result.timings.total, historyId: executionLog._id });
+      res.status(200).json({ ...result, time: result.timings?.total || 0, historyId: executionLog._id });
     } catch (error) {
       res.status(500).json({ error: error.message || 'Failed to execute request' });
     }
