@@ -23,10 +23,16 @@ import connectMongo from "./config/mongo.js";
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 // Global Middlewares
 app.use(helmet()); // Security headers
 app.use(cors({
-  origin: config.clientUrl, 
+  origin: (origin, callback) => {
+    // Allow non-browser requests or dynamic origin reflection
+    if (!origin) return callback(null, true);
+    return callback(null, origin);
+  }, 
   credentials: true 
 }));
 app.use(express.json()); // Parse JSON bodies

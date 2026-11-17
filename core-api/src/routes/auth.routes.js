@@ -31,7 +31,14 @@ const handleAuthCallback = (req, res) => {
 
   // 2. Redirect to Frontend with Token
   // Frontend will read this param, save it to localStorage/Zustand, and strip it from URL
-  res.redirect(`${process.env.CLIENT_URL}/auth/callback`);
+  const host = req.get('x-forwarded-host') || req.get('host');
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const dynamicClientUrl = `${proto}://${host}`;
+  const targetClientUrl = (process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost:3000'))
+    ? process.env.CLIENT_URL
+    : dynamicClientUrl;
+
+  res.redirect(`${targetClientUrl}/auth/callback`);
 };
 
 // --- Google Routes ---
