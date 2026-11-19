@@ -101,15 +101,11 @@ export const wsRunnerService = {
 
         session.ws.send(message);
 
-        // ✨ Save to memory
+        // Save to memory for ExecutionLog
         session.meta.messages.push({
             direction: 'outgoing',
             data: message,
             time: Date.now()
-        });
-
-        sseService.sendEvent(connectionId, 'ws_message', {
-            direction: 'outgoing', message: message, timestamp: Date.now()
         });
 
         return { success: true };
